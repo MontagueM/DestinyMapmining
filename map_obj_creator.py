@@ -1,6 +1,9 @@
 import os
 import pkg_db
 import struct
+from dataclasses import dataclass, fields, field
+from typing import List
+import numpy as np
 pkgs_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/'
 
 package_dir_list = ['eden_06a1',
@@ -8,10 +11,68 @@ package_dir_list = ['eden_06a1',
                     'eden_036a']  # With / at end
 
 
+@dataclass
+class MapHeader:
+    Identifier: np.uint32 = np.uint32(0)  # 0; should equal D6000012
+    Unknown: List[np.uint8] = field(default_factory=list)  # [0x40] padding from 0x04->0x43
+    SecondDataStart: np.uint32 = np.uint32(0) # 0x44
+    Field48: np.uint32 = np.uint32(0)
+    SecondDataEnd: np.uint32 = np.uint32(0) # 0x4C
+    Field50: np.uint32 = np.uint32(0)  # padding
+    Field54: np.uint32 = np.uint32(0)
+    Field58: np.uint32 = np.uint32(0)
+    Field5C: np.uint32 = np.uint32(0)
+    Field60: np.uint32 = np.uint32(0)
+    Field64: np.uint32 = np.uint32(0)
+    Field68: np.uint32 = np.uint32(0)
+    Field6C: np.uint32 = np.uint32(0)
+    FirstDataStart: np.uint32 = np.uint32(0)  # 70
+    Field74: np.uint32 = np.uint32(0)
+    FirstDataEnd: np.uint32 = np.uint32(0)  # 78
+    # There's some extra stuff but idk what it does
+
+
 def get_hex_data(direc):
     t = open(direc, 'rb')
     h = t.read().hex().upper()
     return h
+
+
+def get_flipped_hex(h, length):
+    """
+    Flips the hex around so the data is read correctly eg 00 80 00 00 = 00 00 80 00. Takes every pair of bytes and
+    flips them so AC 18 = 18 AC.
+    :param h: the hex string to flip around
+    :param length: how long this hex string is (len(h) doesn't work)
+    :return: the flipped hex
+    """
+    if length % 2 != 0:
+        print("Flipped hex length is not even.")
+        return None
+    return "".join(reversed([h[:length][i:i + 2] for i in range(0, length, 2)]))
+
+
+def get_header(file_hex):
+    header_length = int('0x16F', 16)
+    # The header data is 0x16F bytes long, so we need to x2 as python reads each nibble not each byte
+    header = file_hex[:header_length * 2]
+
+    map_header = MapHeader()
+    for f in fields(map_header):
+        if f.type == np.uint32:
+            flipped = "".join(get_flipped_hex(header, 8))
+            value = np.uint32(int(flipped, 16))
+            setattr(map_header, f.name, value)
+            header = header[8:]
+        elif f.type == List[np.uint8]:
+            # print(header)
+            # these are 2*0x40 as the arrays need to be 0x40 long and uint8 so 2*0x40 bytes
+            flipped = get_flipped_hex(header, 2*0x40)
+            # print(flipped)
+            value = [np.uint8(int(flipped[i:i + 2], 16)) for i in range(len(flipped))]
+            setattr(map_header, f.name, value)
+            header = header[2*0x40:]
+    return map_header
 
 
 def file_to_coords(file_hex):
@@ -48,7 +109,8 @@ def coords_to_obj(coords, pkg, file_name):
 
 
 pkg_db.start_db_connection('2_9_0_1')
-
+want_files = ['06A2-00000D8C', '06A2-00000EE4', '06A2-00000EF5', '06A2-000011EC', '06A2-00001312',
+              '06A2-000013BA', '06A2-00001402']
 for pkg in package_dir_list:
     try:
         os.mkdir("Objects/")
@@ -57,13 +119,23 @@ for pkg in package_dir_list:
         try:
             os.mkdir("Objects/" + pkg)
         except FileExistsError:
-
             pass
     entries = {x: y for x, y in pkg_db.get_entries_from_table(pkg, 'FileName, FileType')}
 
     for file in os.listdir(pkgs_dir + pkg):
         file_name = file.split('.')[0]
+        if file_name not in want_files:
+            continue
         if entries[file_name] == "Mapping Data":
             file_hex = get_hex_data(pkgs_dir + pkg + '/' + file)
+            header = get_header(file_hex)
+            if header.Identifier != 'D6000012':  # Seems to be required for a "good" file
+                continue
+            data_start =
             coords = file_to_coords(file_hex)
             coords_to_obj(coords, pkg, file_name)
+
+
+# Could write up different extractors:
+# 1. The normal extractor we have now
+# 2. An extractor that prefixes with different bytes (eg 44, 3F, 42, 4C, etc to identify which ones are good)
