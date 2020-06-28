@@ -6,9 +6,11 @@ from typing import List
 import numpy as np
 pkgs_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/'
 
-package_dir_list = ['eden_06a1',
-                    'eden_06a2',
-                    'eden_036a']  # With / at end
+# package_dir_list = ['eden_06a1',
+#                     'eden_06a2',
+#                     'eden_036a']  # With / at end
+
+package_dir_list = ['cayde_6_feet_under_0368']
 
 
 @dataclass
@@ -85,14 +87,34 @@ def file_to_coords(file_hex):
         floats.append(str(round(float_value, 2)))
     # Formatting for x,y,z
     coords = [floats[i:i+3] for i in range(0, len(floats), 3)]
+    print(len(coords))
+    coords = [x for x in coords if len(x) == 3]
+    # ban_coord_counter_x = len([x for x in coords if abs(float(x[0])) < 500])
+    # ban_coord_counter_y = len([x for x in coords if abs(float(x[1])) < 500])
+    # limit = 0.5 * len(coords)
+    # print(ban_coord_counter_x, ban_coord_counter_y, limit)
+    # if ban_coord_counter_x > limit and ban_coord_counter_y > limit:
+    #     return None
     return coords
+
+
+def clean_coord(coord):
+    # if len(coord) != 3:
+    #     return None
+    for i in coord:
+        if abs(float(i)) > 1e6:
+            return None
+    # if abs(float(coord[0])) < 50:
+    #     return None
+    return coord
 
 
 def coords_to_obj(coords, pkg, file_name):
     lines_to_write = []
     #print(f'Number of coords {len(coords)}')
     for coord in coords:
-        if len(coord) != 3:
+        coord = clean_coord(coord)
+        if not coord:
             continue
         line = f'v {coord[0]} {coord[1]} {coord[2]}\n'  # Coords
         if 'nan' not in line:
@@ -109,8 +131,8 @@ def coords_to_obj(coords, pkg, file_name):
 
 
 pkg_db.start_db_connection('2_9_0_1')
-want_files = ['06A2-00000D8C', '06A2-00000EE4', '06A2-00000EF5', '06A2-000011EC', '06A2-00001312',
-              '06A2-000013BA', '06A2-00001402']
+# want_files = ['06A2-00000D8C', '06A2-00000EE4', '06A2-00000EF5', '06A2-000011EC', '06A2-00001312',
+#               '06A2-000013BA', '06A2-00001402']
 for pkg in package_dir_list:
     try:
         os.mkdir("Objects/")
@@ -124,15 +146,19 @@ for pkg in package_dir_list:
 
     for file in os.listdir(pkgs_dir + pkg):
         file_name = file.split('.')[0]
-        if file_name not in want_files:
-            continue
+        # if file_name not in want_files:
+        #     continue
         if entries[file_name] == "Mapping Data":
             file_hex = get_hex_data(pkgs_dir + pkg + '/' + file)
             header = get_header(file_hex)
-            if header.Identifier != 'D6000012':  # Seems to be required for a "good" file
+            if hex(header.Identifier)[2:].upper() != 'D6000012':  # Seems to be required for a "good" file
                 continue
-            data_start =
-            coords = file_to_coords(file_hex)
+            data1 = file_hex[header.FirstDataStart*2:header.FirstDataEnd*2]
+            data2 = file_hex[header.SecondDataStart*2:header.SecondDataEnd*2]
+            coords = file_to_coords(data1 + data2)
+            if not coords:
+                print(f"Not converting {file_name} to obj")
+                continue
             coords_to_obj(coords, pkg, file_name)
 
 
