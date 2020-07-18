@@ -10,7 +10,7 @@ pkgs_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/'
 #                     'eden_06a2',
 #                     'eden_036a']  # With / at end
 
-package_dir_list = ['cayde_6_feet_under_0368']
+package_dir_list = ['city_tower_d2_0369']
 
 
 @dataclass
@@ -155,6 +155,7 @@ for pkg in package_dir_list:
                 continue
             data1 = file_hex[header.FirstDataStart*2:header.FirstDataEnd*2]
             data2 = file_hex[header.SecondDataStart*2:header.SecondDataEnd*2]
+            print(header)
             coords = file_to_coords(data1 + data2)
             if not coords:
                 print(f"Not converting {file_name} to obj")
