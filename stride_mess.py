@@ -3,6 +3,7 @@ import struct
 import pkg_db
 from dataclasses import dataclass, fields
 import numpy as np
+import binascii
 
 
 @dataclass
@@ -69,25 +70,118 @@ def get_stride_data(stride_header_12_file):
         print(entries_filetype[ref_file_name])
 
 
-def half_float(hex_data_split):
+def float_from_unsigned16(n):
+    assert 0 <= n < 2**16
+    sign = n >> 15
+    exp = (n >> 10) & 0b011111
+    fraction = n & (2**10 - 1)
+    if exp == 0:
+        if fraction == 0:
+            return -0.0 if sign else 0.0
+        else:
+            return (-1)**sign * fraction / 2**10 * 2**(-14)  # subnormal
+    elif exp == 0b11111:
+        if fraction == 0:
+            return float('-inf') if sign else float('inf')
+        else:
+            return float('nan')
+    print('f', exp, fraction, (-1)**sign * (1 + fraction / 2**10) * 2**(exp - 15))
+    return (-1)**sign * (1 + fraction / 2**10) * 2**(exp - 15)
+
+
+def half_float_stride8(hex_data_split):
+    """
+    A half float is defined in OpenGL in this case as a 16 bit float with a sign bitdepth of 1, mantissa bitdepth 10,
+    exponent bitdepth 5.
+    Bias is calculated as 2^(exp bitdepth) - 1 = 31
+    Mantissa division is by 2^(mantissa bitdepth) = 1024
+    """
+    exp_bitdepth = 5
+    mantissa_bitdepth = 10
+    bias = 2**(exp_bitdepth - 1) - 1
+    mantissa_division = 2**(mantissa_bitdepth)
+    coords = []
+    for hex_data in hex_data_split:
+        coord = []
+        scale_hex = get_flipped_hex(hex_data[-4:], 4)
+        # scale = np.frombuffer(binascii.unhexlify(get_flipped_hex(scale_hex, 4)), dtype=np.float16)[0]
+        scale = int(scale_hex, 16)
+        for i in range(3):
+            selection = hex_data[4 * i:4 * (i + 1)]
+            # print(selection)
+            # Swapping 16 bit endianness
+            flipped_selection = get_flipped_hex(selection, 4)
+            coord.append(np.frombuffer(binascii.unhexlify(flipped_selection), dtype=np.float16)[0]/scale)
+        print(coord, f'scale: {scale_hex} {scale}')
+        coords.append(coord)
+    with open('half_float_12e0_flipped_8.obj', 'w') as f:
+        f.write(f'o test\n')
+        for coord in coords:
+            line = f'v {coord[0]} {coord[1]} {coord[2]}\n'  # Coords
+            if 'NaN' not in line and 'INF' not in line:
+                f.write(line)
+        print('Wrote half float')
+
+
+def half_float_stride20(hex_data_split):
+    """
+    A half float is defined in OpenGL in this case as a 16 bit float with a sign bitdepth of 1, mantissa bitdepth 10,
+    exponent bitdepth 5.
+    Bias is calculated as 2^(exp bitdepth) - 1 = 31
+    Mantissa division is by 2^(mantissa bitdepth) = 1024
+    """
+    coords = []
+    for hex_data in hex_data_split:
+        print(hex_data)
+        coord = []
+        scale_hex = get_flipped_hex(hex_data[-4:], 4)
+        # scale = np.frombuffer(binascii.unhexlify(get_flipped_hex(scale_hex, 4)), dtype=np.float16)[0]
+        scale = int(scale_hex, 16)
+        for i in range(3):
+            selection = hex_data[4 * i:4 * (i + 1)]
+            flipped_selection = get_flipped_hex(selection, 4)
+            coord.append(np.frombuffer(binascii.unhexlify(flipped_selection), dtype=np.float16)[0]/scale)
+        print(coord, f'scale: {scale_hex} {scale}')
+        coords.append(coord)
+    with open('half_float_12e0_flipped_20.obj', 'w') as f:
+        f.write(f'o test\n')
+        for coord in coords:
+            line = f'v {coord[0]} {coord[1]} {coord[2]}\n'  # Coords
+            if 'NaN' not in line and 'INF' not in line:
+                f.write(line)
+        print('Wrote half float')
+
+
+def bfloat16(hex_data_split):
+    """
+    A bfloat16 is defined as being a signed float with exponent 8 bitdepth and mantissa 7 bitdepth.
+    Bias is calculated as 2^(exp bitdepth - 1) - 1 = 127
+    Mantissa division is by 2^(mantissa bitdepth) = 127
+    """
+    exp_bitdepth = 8
+    mantissa_bitdepth = 7
+    bias = 2**(exp_bitdepth - 1) - 1
+    mantissa_division = 2**(mantissa_bitdepth)
     coords = []
     for hex_data in hex_data_split:
         coord = []
         for i in range(3):
-            selection = hex_data[4*i:4*(i+1)]
+            selection = hex_data[4 * i:4 * (i + 1)]
             # print(selection)
             # Swapping 16 bit endianness
             flipped_selection = get_flipped_hex(selection, 4)
             int_fs = int(flipped_selection, 16)
-            mantissa = int_fs & 0x3FF
-            exponent = (int_fs >> 0x0A) & 0x1F
-            negative = (int_fs >> 0x8000) & 0x01
-            # print(mantissa, exponent, negative)
+            mantissa = int_fs & 0x3F
+            mantissa_abs = mantissa / mantissa_division
+            exponent = (int_fs >> 0x7) & 0xFF
+            negative = (int_fs >> 0xF) & 0x01
+            print(mantissa, exponent, negative)
             if exponent == 0:
-                flt = mantissa * 2**31
-            elif 0 < exponent < 31:
-                flt = (mantissa / 1024) * 2**(exponent-31)
-            elif exponent == 31:
+                flt = mantissa_abs * 2 ** (bias - 1)
+            elif 0 < exponent < 2 ** exp_bitdepth - 1:
+                # TODO check if should be abs mantissa or just mantissa
+                flt = (1 + mantissa) * 2 ** (exponent - bias)
+            elif exponent == 2 ** exp_bitdepth - 1:
                 if mantissa == 0:
                     flt = 'INF'
                 else:
@@ -97,22 +191,16 @@ def half_float(hex_data_split):
             coord.append(flt)
         print(coord)
         coords.append(coord)
-    with open('half_float_12e0.obj', 'w') as f:
+    with open('bfloat16_12e0.obj', 'w') as f:
         f.write(f'o test\n')
         for coord in coords:
             line = f'v {coord[0]} {coord[1]} {coord[2]}\n'  # Coords
             if 'NaN' not in line and 'INF' not in line:
                 f.write(line)
-        print('Wrote')
+        print('Wrote bfloat16')
 
 
 def float_tests(pkg_name, stride_header_12_file):
-    """
-    A half float is defined in OpenGL in this case as a 16 bit float with a sign bitdepth of 1, mantissa bitdepth 10,
-    exponent bitdepth 5.
-    Bias is calculated as 2^(exp bitdepth) - 1 = 31
-    Mantissa division is by 2^(mantissa bitdepth) = 1024
-    """
     pkg_db.start_db_connection('2_9_0_1')
     entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID')}
     entries_filetype = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, FileType')}
@@ -125,7 +213,11 @@ def float_tests(pkg_name, stride_header_12_file):
         stride_hex = get_hex_data(test_dir + '/' + pkg_name + '/' + ref_file_name + '.bin')
 
         hex_data_split = [stride_hex[i:i + stride_header.StrideLength*2] for i in range(0, len(stride_hex), stride_header.StrideLength*2)]
-        half_float(hex_data_split)
+        if stride_header.StrideLength == 8:
+            half_float_stride8(hex_data_split)
+        elif stride_header.StrideLength == 20:
+            half_float_stride20(hex_data_split)
+        # bfloat16(hex_data_split)
 
 
 # remember to only check 12 byte stride files not the data itself
@@ -133,3 +225,7 @@ def float_tests(pkg_name, stride_header_12_file):
 # get_stride_data('0369-00000C87')
 # half_float_test('city_tower_d2_0369', '0369-00001088')
 float_tests('globals_01fe', '01FE-000012E0')
+float_tests('globals_01fe', '01FE-000012E1')
+
+a = struct.pack("H", int('9983', 16))
+print(np.frombuffer(a, dtype =np.float16)[0])
