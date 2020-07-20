@@ -199,3 +199,19 @@ print('\n')
 get_faces_data('city_tower_d2_0369', '0369-00000394')
 get_stride_data('city_tower_d2_0369', '0369-00000397')
 get_stride_data('city_tower_d2_0369', '0369-0000039D')
+
+
+faces_17c4 = get_faces_data('globals_0238', '0238-000017C4')
+with open('faces_17c4.txt', 'w') as f:
+    for row in faces_17c4:
+        f.write(row + '\n')
+
+faces_d04 = get_faces_data('activities_022e', '022E-00000D04')
+with open('faces_d04.txt', 'w') as f:
+    for row in faces_d04:
+        f.write(row + '\n')
+
+faces_56 = get_faces_data('city_tower_d2_0369', '0369-00000056')
+with open('faces_56.txt', 'w') as f:
+    for row in faces_56:
+        f.write(row + '\n')
