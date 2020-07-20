@@ -142,7 +142,7 @@ def get_referenced_file(file):
     return ref_file_name, entries_filetype[ref_file_name]
 
 
-def get_model(model_file):
+def get_model(model_file_hash):
     """
     Given a model file:
     - open the model file and identify the model data file
@@ -155,21 +155,22 @@ def get_model(model_file):
     - write obj
     """
     pkg_db.start_db_connection('2_9_0_1')
+    model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
     print(model_data_file)
     faces_file, verts_file = get_faces_verts_files(model_data_file)
     print(faces_file, verts_file)
     faces_data = get_faces_data(faces_file)
     print(f'Num faces: {len(faces_data)}')
-    # print(faces_data)
+    print(faces_data)
     verts_data = get_verts_data(verts_file)
-    print(f'Num faces: {len(verts_data)}')
+    print(f'Num verts: {len(verts_data)}')
     # print(verts_data)
     faces_data = trim_faces_data(faces_data, len(verts_data))
     print(f'Num trimmed faces: {len(faces_data)}')
     # print(faces_data)
     obj_str = get_obj_str(faces_data, verts_data)
-    write_obj(obj_str, model_file)
+    write_obj(obj_str, model_file_hash.upper())
 
 
 def get_model_data_file(model_file):
@@ -249,21 +250,24 @@ def get_verts_data(verts_file):
 # A terrible method that should be replaced by a deterministic system
 def trim_faces_data(faces_data, num_verts):
     reset = True
+    hit_max = False
+    start = 0
     for i, face in enumerate(faces_data):
         if face[0] == 1 and reset:
-            start = i
+            start = int(i)
+            print('start', start)
             reset = False
+            hit_max = False
         for v in face:
             # If we're travelling along a set of faces that isn't for this obj
             if v > num_verts:
                 reset = True
-            if num_verts in face:
-                if i == len(faces_data)-1:
-                    end = i+1
-                elif 1 in faces_data[i+1]:
-                    end = i
-    return faces_data[start:end]
-
+        if num_verts in face:
+            hit_max = True
+        if hit_max and 1 in face or hit_max and i == len(faces_data)-1:
+            return faces_data[start:i]
+        else:
+            reset = True
 
 def get_obj_str(faces_data, verts_data):
     verts_str = ''
@@ -275,12 +279,15 @@ def get_obj_str(faces_data, verts_data):
     return verts_str + faces_str
 
 
-def write_obj(obj_str, file_name):
-    model_hash = get_hash_from_file(file_name)
-    with open(f'unpacked_objects/{model_hash}.obj', 'w') as f:
-        f.write(f'o {model_hash}\n')
+def write_obj(obj_str, file_hash):
+    with open(f'unpacked_objects/{file_hash}.obj', 'w') as f:
+        f.write(f'o {file_hash}\n')
         for line in obj_str:
             f.write(line)
 
 
-get_model('0369-00000200')
+get_model('0022ED80')
+get_model('242AED80')
+get_model('A117C780')
+get_model('16CDC580')
+get_model('5C20ED80')
