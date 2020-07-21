@@ -79,11 +79,14 @@ def get_pkg_name(file):
 def get_referenced_file(file):
     pkg_name = get_pkg_name(file)
 
+    entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG')}
     entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID')}
-    entries_filetype = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, FileType')}
+    ref_pkg_id = entries_refpkg[file][2:]
+    ref_pkg_name = get_pkg_name(f'{ref_pkg_id}-')
+    entries_filetype = {x: y for x, y in pkg_db.get_entries_from_table(ref_pkg_name, 'FileName, FileType')}
 
-    ref_file_name = f'{pkg_name.split("_")[-1].upper()}-0000' + entries_refid[file][2:]
-    return ref_file_name, entries_filetype[ref_file_name]
+    ref_file_name = f'{ref_pkg_id}-0000' + entries_refid[file][2:]
+    return ref_pkg_name, ref_file_name, entries_filetype[ref_file_name]
 
 
 def get_model(model_file_hash):
@@ -148,10 +151,10 @@ def get_faces_verts_files(model_data_file):
 
 def get_faces_data(faces_file):
     pkg_name = get_pkg_name(faces_file)
-    ref_file, ref_file_type = get_referenced_file(faces_file)
+    ref_pkg_name, ref_file, ref_file_type = get_referenced_file(faces_file)
     faces = []
     if ref_file_type == "Faces Header":
-        faces_hex = get_hex_data(f'{test_dir}/{pkg_name}/{ref_file}.bin')
+        faces_hex = get_hex_data(f'{test_dir}/{ref_pkg_name}/{ref_file}.bin')
         int_faces_data = [int(get_flipped_hex(faces_hex[i:i+4], 4), 16)+1 for i in range(0, len(faces_hex), 4)]
         for i in range(0, len(int_faces_data), 3):
             face = []
@@ -160,23 +163,25 @@ def get_faces_data(faces_file):
             faces.append(face)
         return faces
     else:
-        print('Incorrect type of file.')
+        print(f'Faces: Incorrect type of file {ref_file_type} for ref file {ref_file} verts file {faces_file}')
+        quit()
         return
 
 
 def get_verts_data(verts_file):
     pkg_name = get_pkg_name(verts_file)
-    ref_file, ref_file_type = get_referenced_file(verts_file)
+    ref_pkg_name, ref_file, ref_file_type = get_referenced_file(verts_file)
     if ref_file_type == "Stride Header":
         header_hex = get_hex_data(f'{test_dir}/{pkg_name}/{verts_file}.bin')
         stride_header = get_header(header_hex, Stride12Header())
 
-        stride_hex = get_hex_data(f'{test_dir}/{pkg_name}/{ref_file}.bin')
+        stride_hex = get_hex_data(f'{test_dir}/{ref_pkg_name}/{ref_file}.bin')
 
         hex_data_split = [stride_hex[i:i + stride_header.StrideLength * 2] for i in
                           range(0, len(stride_hex), stride_header.StrideLength * 2)]
     else:
-        print('Incorrect type of file.')
+        print(f'Verts: Incorrect type of file {ref_file_type} for ref file {ref_file} verts file {verts_file}')
+        quit()
         return
 
     coords = []

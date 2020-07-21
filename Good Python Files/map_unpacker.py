@@ -138,13 +138,14 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        if i > 6:
-            return obj_strings
+        # if i > 3:
+        #     return obj_strings
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
-        if i == 14:
+        if i == 38:
             print()
         for copy_id, transform in enumerate(transform_array[1]):
+            # print(f'{transform_array[0]}_{copy_id}')
             # r_verts_data = rotate_verts(verts_data, transform[1])
             # TODO fix rotating (should be r_verts_data down here)
             mr_verts_data = move_verts(verts_data, transform[0])
@@ -171,14 +172,16 @@ def adjust_faces_data(faces_data, max_vert_used):
 
 def rotate_verts(verts_data, rotation_transform):
     rotated_verts = []
-    for i in range(len(verts_data)):
-        coord = verts_data[i]
-        a = rotation_transform[0]
-        b = rotation_transform[1]
-        y = rotation_transform[2]
-        rotation_matrix = [[np.cos(a) * np.cos(b), np.cos(a) * np.sin(b) * np.sin(y) - np.sin(a) * np.cos(y), np.cos(a) * np.sin(b) * np.cos(y) + np.sin(a) * np.sin(y)],
-                           [np.sin(a) * np.cos(b), np.sin(a) * np.sin(b) * np.sin(y) + np.cos(a) * np.cos(y), np.sin(a) * np.sin(b) * np.cos(y) - np.cos(a) * np.sin(y)],
-                           [-np.sin(b), np.cos(b)*np.sin(y), np.cos(b)*np.cos(y)]]
+    a = rotation_transform[0]
+    b = rotation_transform[1]
+    y = rotation_transform[2]
+    # print(a, b, y, rotation_transform)
+    rotation_matrix = [[np.cos(a) * np.cos(b), np.cos(a) * np.sin(b) * np.sin(y) - np.sin(a) * np.cos(y),
+                        np.cos(a) * np.sin(b) * np.cos(y) + np.sin(a) * np.sin(y)],
+                       [np.sin(a) * np.cos(b), np.sin(a) * np.sin(b) * np.sin(y) + np.cos(a) * np.cos(y),
+                        np.sin(a) * np.sin(b) * np.cos(y) - np.cos(a) * np.sin(y)],
+                       [-np.sin(b), np.cos(b) * np.sin(y), np.cos(b) * np.cos(y)]]
+    for coord in verts_data:
         rotated_coord = np.array(coord).dot(rotation_matrix)
         rotated_verts.append(rotated_coord)
     return rotated_verts
