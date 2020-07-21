@@ -118,6 +118,17 @@ def get_model(model_file_hash):
     write_obj(obj_str, model_file_hash.upper())
 
 
+def get_verts_faces_data(model_file_hash):
+    pkg_db.start_db_connection('2_9_0_1')
+    model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
+    model_data_file = get_model_data_file(model_file)
+    faces_file, verts_file = get_faces_verts_files(model_data_file)
+    faces_data = get_faces_data(faces_file)
+    verts_data = get_verts_data(verts_file)
+    faces_data = trim_faces_data(faces_data, len(verts_data))
+    return verts_data, faces_data
+
+
 def get_model_data_file(model_file):
     pkg_name = get_pkg_name(model_file)
     model_hex = get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
@@ -232,17 +243,18 @@ def write_obj(obj_str, file_hash):
             f.write(line)
 
 
-# get_model('0022ED80')
-# get_model('242AED80')
-# get_model('A117C780')
-# get_model('16CDC580')
-# get_model('5C20ED80')
-# get_model('4224ED80')
+if __name__ == '__main__':
+    # get_model('0022ED80')
+    # get_model('242AED80')
+    # get_model('A117C780')
+    # get_model('16CDC580')
+    # get_model('5C20ED80')
+    # get_model('4224ED80')
 
-get_model('C7D1F380')
-get_model('F321ED80')
-get_model('3CF55681')
-get_model('C722ED80')
-get_model('1424ED80')
-get_model('8B21ED80')
-get_model('F322ED80')
+    get_model('C7D1F380')
+    get_model('F321ED80')
+    get_model('3CF55681')
+    get_model('C722ED80')
+    get_model('1424ED80')
+    get_model('8B21ED80')
+    get_model('F322ED80')
