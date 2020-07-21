@@ -138,7 +138,7 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        if i > 2:
+        if i > 6:
             return obj_strings
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
@@ -152,8 +152,6 @@ def get_model_obj_strings(transforms_array):
             obj_str = model_unpacker.get_obj_str(adjusted_faces_data, mr_verts_data)
             obj_str = f'o {transform_array[0]}_{copy_id}\n' + obj_str
             obj_strings.append(obj_str)
-            if i > 0:
-                max_vert_used += 1
     return obj_strings
 
 

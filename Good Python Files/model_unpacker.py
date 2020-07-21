@@ -113,6 +113,7 @@ def get_model(model_file_hash):
     # print(verts_data)
     faces_data = trim_faces_data(faces_data, len(verts_data))
     print(f'Num trimmed faces: {len(faces_data)}')
+    # TODO add trimming for verts as below
     # print(faces_data)
     obj_str = get_obj_str(faces_data, verts_data)
     write_obj(obj_str, model_file_hash.upper())
@@ -126,6 +127,7 @@ def get_verts_faces_data(model_file_hash):
     faces_data = get_faces_data(faces_file)
     verts_data = get_verts_data(verts_file)
     faces_data = trim_faces_data(faces_data, len(verts_data))
+    verts_data = trim_verts_data(verts_data, faces_data)
     return verts_data, faces_data
 
 
@@ -226,6 +228,14 @@ def trim_faces_data(faces_data, num_verts):
             reset = True
 
 
+def trim_verts_data(verts_data, faces_data):
+    all_v = []
+    for face in faces_data:
+        for v in face:
+            all_v.append(v)
+    return verts_data[:max(all_v)]
+
+
 def get_obj_str(faces_data, verts_data):
     verts_str = ''
     for coord in verts_data:
@@ -259,4 +269,4 @@ if __name__ == '__main__':
     # get_model('8B21ED80')
     # get_model('F322ED80')
 
-    get_model('2120ED80')
+    get_model('CCC7F380')
