@@ -48,11 +48,7 @@ def get_hash_from_file(file):
     two = hex(one + secondhex_int + 2155872256)
     return two[2:]
 
-#
-#
-# test_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/'
-#
-#
+
 def get_header(file_hex, header):
     # The header data is 0x16F bytes long, so we need to x2 as python reads each nibble not each byte
 
@@ -63,59 +59,7 @@ def get_header(file_hex, header):
             setattr(header, f.name, value)
             file_hex = file_hex[8:]
     return header
-#
-#
-# pkg_name = 'globals_0238'
-# stride_header_12_file = '0238-000017B2'
-# hex_data_split = []
-#
-# pkg_db.start_db_connection('2_9_0_1')
-# entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID')}
-# entries_filetype = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, FileType')}
-# ref_file_name = f'{pkg_name.split("_")[-1].upper()}-0000' + entries_refid[stride_header_12_file][2:]
-# if entries_filetype[ref_file_name] == "Stride Header":  # Stride Header I think is the actual data
-#     header_hex = get_hex_data(test_dir + '/' + pkg_name + '/' + stride_header_12_file + '.bin')
-#     stride_header = get_header(header_hex, Stride12Header())
-#     print(stride_header)
-#
-#     stride_hex = get_hex_data(test_dir + '/' + pkg_name + '/' + ref_file_name + '.bin')
-#
-#     hex_data_split = [stride_hex[i:i + stride_header.StrideLength * 2] for i in
-#                       range(0, len(stride_hex), stride_header.StrideLength * 2)]
-# else:
-#     quit()
-#
-# coords = []
-# for hex_data in hex_data_split:
-#     coord = []
-#     for j in range(3):
-#         selection = get_flipped_hex(hex_data[j*4:j*4+4], 4)
-#         exp_bitdepth = 0
-#         mantissa_bitdepth = 15
-#         bias = 2 ** (exp_bitdepth - 1) - 1
-#         mantissa_division = 2 ** mantissa_bitdepth
-#         int_fs = int(selection, 16)
-#         mantissa = int_fs & 2**mantissa_bitdepth - 1
-#         mantissa_abs = mantissa / mantissa_division
-#         exponent = (int_fs >> mantissa_bitdepth) & 2**exp_bitdepth - 1
-#         negative = int_fs >> 15
-#         print(mantissa, negative)
-#         if exponent == 0:
-#             flt = mantissa_abs * 2 ** (bias - 1)
-#         else:
-#             print('Error!!')
-#             quit()
-#         if negative:
-#             flt += -0.35
-#         coord.append(flt)
-#     print(coord)
-#     coords.append(coord)
-# with open(f'unpacked_objects/{ref_file_name}.obj', 'w') as f:
-#     f.write(f'o testing_a117c780\n')
-#     for k, coord in enumerate(coords):
-#         line = f'v {coord[0]} {coord[1]} {coord[2]}\n'  # Coords
-#         print(f'{k+1}/{len(coords)}: v {round(coord[0], 3)} {round(coord[1], 3)} {round(coord[2], 3)}\n')
-#         f.write(line)
+
 
 test_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all'
 
@@ -127,7 +71,7 @@ def get_pkg_name(file):
             pkg_name = folder
             break
     else:
-        print('Could not find folder.')
+        print(f'Could not find folder for {file}')
         return
     return pkg_name
 
@@ -154,15 +98,16 @@ def get_model(model_file_hash):
     - combine the faces and vert data into the obj
     - write obj
     """
+    print(model_file_hash)
     pkg_db.start_db_connection('2_9_0_1')
     model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
-    print(model_data_file)
+    # print(model_data_file)
     faces_file, verts_file = get_faces_verts_files(model_data_file)
-    print(faces_file, verts_file)
+    # print(faces_file, verts_file)
     faces_data = get_faces_data(faces_file)
     print(f'Num faces: {len(faces_data)}')
-    print(faces_data)
+    # print(faces_data)
     verts_data = get_verts_data(verts_file)
     print(f'Num verts: {len(verts_data)}')
     # print(verts_data)
@@ -255,7 +200,7 @@ def trim_faces_data(faces_data, num_verts):
     for i, face in enumerate(faces_data):
         if face[0] == 1 and reset:
             start = int(i)
-            print('start', start)
+            # print('start', start)
             reset = False
             hit_max = False
         for v in face:
@@ -268,6 +213,7 @@ def trim_faces_data(faces_data, num_verts):
             return faces_data[start:i]
         else:
             reset = True
+
 
 def get_obj_str(faces_data, verts_data):
     verts_str = ''
@@ -286,8 +232,17 @@ def write_obj(obj_str, file_hash):
             f.write(line)
 
 
-get_model('0022ED80')
-get_model('242AED80')
-get_model('A117C780')
-get_model('16CDC580')
-get_model('5C20ED80')
+# get_model('0022ED80')
+# get_model('242AED80')
+# get_model('A117C780')
+# get_model('16CDC580')
+# get_model('5C20ED80')
+# get_model('4224ED80')
+
+get_model('C7D1F380')
+get_model('F321ED80')
+get_model('3CF55681')
+get_model('C722ED80')
+get_model('1424ED80')
+get_model('8B21ED80')
+get_model('F322ED80')
