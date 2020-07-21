@@ -220,7 +220,7 @@ def trim_faces_data(faces_data, num_verts):
                 reset = True
         if num_verts in face:
             hit_max = True
-        if hit_max and 1 in face or hit_max and i == len(faces_data)-1:
+        if hit_max and 1 in face or i == len(faces_data)-1:
             return faces_data[start:i]
         else:
             reset = True
@@ -251,10 +251,12 @@ if __name__ == '__main__':
     # get_model('5C20ED80')
     # get_model('4224ED80')
 
-    get_model('C7D1F380')
-    get_model('F321ED80')
-    get_model('3CF55681')
-    get_model('C722ED80')
-    get_model('1424ED80')
-    get_model('8B21ED80')
-    get_model('F322ED80')
+    # get_model('C7D1F380')
+    # get_model('F321ED80')
+    # get_model('3CF55681')
+    # get_model('C722ED80')
+    # get_model('1424ED80')
+    # get_model('8B21ED80')
+    # get_model('F322ED80')
+
+    get_model('2120ED80')

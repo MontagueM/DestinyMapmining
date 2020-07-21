@@ -66,22 +66,9 @@ hex_data = get_hex_data(test_dir + a_166d_file + '.bin')
 
 def unpack_map():
     """
-    !Split into coords/rots, model refs, copy counts hex
-    !Get arrays of coords and rots for every copy
-    !Get model reference array
-    !Get array of copy counts
-    !Combine copy counts and model references into a dictionary
-    !Loop through each model reference
-    !    Loop through each copy count
-    !        Make a dict of {model_ref: [coords0, rots0], [coords1, rots1], [coords2, rots2], ...} called model transform data where the transforms are for each copy
-    !For each model transform data
-    !    Pull the model verts and faces ONCE
-    !    For each copy (len of the transforms)
-    !        Adjust the verts positions by the amount in the model coords by addition?
-    !        Adjust the verts positions for rotation
-    !            Multiply vector of positions by 3d rotation matrix for yaw, pitch roll (see onenote for reference)
-            Add the object naming and referencing (eg o 0022ED80_x) for each one and the copy number for now
-    Write the single .obj and view it!!
+    Need to add scale?
+    In order to put all .obj into a single file I need to change the numbers to account for the number of vertices already in file.
+    eg 1// 2// 3// needs to change to 1+number of verts before this// 2+number of verts before this// etc etc
     """
     # Need to add scale
     transform_hex = hex_data[192 * 2:216912 * 2]
@@ -149,15 +136,39 @@ def get_transforms_array(model_refs, copy_counts, coords, rotations):
 
 def get_model_obj_strings(transforms_array):
     obj_strings = []
-    for transform_array in transforms_array:
+    max_vert_used = 0
+    for i, transform_array in enumerate(transforms_array):
+        if i > 2:
+            return obj_strings
+        print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
+        if i == 14:
+            print()
         for copy_id, transform in enumerate(transform_array[1]):
-            r_verts_data = rotate_verts(verts_data, transform[1])
-            mr_verts_data = move_verts(r_verts_data, transform[0])
-            obj_str = model_unpacker.get_obj_str(faces_data, mr_verts_data)
+            # r_verts_data = rotate_verts(verts_data, transform[1])
+            # TODO fix rotating (should be r_verts_data down here)
+            mr_verts_data = move_verts(verts_data, transform[0])
+            adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data, max_vert_used)
+            obj_str = model_unpacker.get_obj_str(adjusted_faces_data, mr_verts_data)
             obj_str = f'o {transform_array[0]}_{copy_id}\n' + obj_str
             obj_strings.append(obj_str)
+            if i > 0:
+                max_vert_used += 1
     return obj_strings
+
+
+def adjust_faces_data(faces_data, max_vert_used):
+    new_faces_data = []
+    all_v = []
+    # print()
+    for face in faces_data:
+        new_face = []
+        for v in face:
+            new_face.append(v + max_vert_used)
+            all_v.append(v + max_vert_used)
+        new_faces_data.append(new_face)
+    u = max(all_v)
+    return new_faces_data, max(all_v)
 
 
 def rotate_verts(verts_data, rotation_transform):
@@ -176,18 +187,21 @@ def rotate_verts(verts_data, rotation_transform):
 
 
 def move_verts(verts_data, move_transform):
+    # print(move_transform)
     moved_verts = []
     for coord in verts_data:
-        moved_vert = coord + move_transform
-        moved_verts.append(moved_vert)
+        moved_vert = np.array(coord) + np.array(move_transform)
+        moved_verts.append([round(x, 3) for x in moved_vert.tolist()])
+    # print(verts_data)
+    # print(moved_verts)
     return moved_verts
 
 
 def write_obj_strings(obj_strings):
-    with open('city_tower_d2_0369.obj', 'w') as f:
+    with open('unpacked_objects/city_tower_d2_0369.obj', 'w') as f:
         for string in obj_strings:
             for line in string:
                 f.write(line)
-
+    print('Written to file.')
 
 unpack_map()
