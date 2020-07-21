@@ -71,15 +71,15 @@ def unpack_map():
     !Get model reference array
     !Get array of copy counts
     !Combine copy counts and model references into a dictionary
-    Loop through each model reference
-        Loop through each copy count
-            Make a dict of {model_ref: [coords0, rots0], [coords1, rots1], [coords2, rots2], ...} called model transform data where the transforms are for each copy
-    For each model transform data
-        Pull the model verts and faces ONCE
-        For each copy (len of the transforms)
-            Adjust the verts positions by the amount in the model coords by addition?
-            Adjust the verts positions for rotation
-                Multiply vector of positions by 3d rotation matrix for yaw, pitch roll (see onenote for reference)
+    !Loop through each model reference
+    !    Loop through each copy count
+    !        Make a dict of {model_ref: [coords0, rots0], [coords1, rots1], [coords2, rots2], ...} called model transform data where the transforms are for each copy
+    !For each model transform data
+    !    Pull the model verts and faces ONCE
+    !    For each copy (len of the transforms)
+    !        Adjust the verts positions by the amount in the model coords by addition?
+    !        Adjust the verts positions for rotation
+    !            Multiply vector of positions by 3d rotation matrix for yaw, pitch roll (see onenote for reference)
             Add the object naming and referencing (eg o 0022ED80_x) for each one and the copy number for now
     Write the single .obj and view it!!
     """
@@ -91,7 +91,8 @@ def unpack_map():
     copy_count_hex = hex_data[219104*2:]
     copy_counts = get_copy_counts(copy_count_hex)
     transforms_array = get_transforms_array(model_refs, copy_counts, coords, rotations)
-    obj_strs = get_model_obj_strings(transforms_array)
+    obj_strings = get_model_obj_strings(transforms_array)
+    write_obj_strings(obj_strings)
 
 
 def get_transform_data(transform_hex):
@@ -136,7 +137,7 @@ def get_transforms_array(model_refs, copy_counts, coords, rotations):
     transforms_array = []
     model_dict = dict(zip(model_refs, copy_counts))
     last_index = 0
-    for model, copies in model_dict:
+    for model, copies in model_dict.items():
         transforms = []
         for copy_id in range(copies):
             transforms.append([coords[last_index + copy_id], rotations[last_index + copy_id]])
@@ -147,8 +148,46 @@ def get_transforms_array(model_refs, copy_counts, coords, rotations):
 
 
 def get_model_obj_strings(transforms_array):
+    obj_strings = []
     for transform_array in transforms_array:
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
-        
+        for copy_id, transform in enumerate(transform_array[1]):
+            r_verts_data = rotate_verts(verts_data, transform[1])
+            mr_verts_data = move_verts(r_verts_data, transform[0])
+            obj_str = model_unpacker.get_obj_str(faces_data, mr_verts_data)
+            obj_str = f'o {transform_array[0]}_{copy_id}\n' + obj_str
+            obj_strings.append(obj_str)
+    return obj_strings
+
+
+def rotate_verts(verts_data, rotation_transform):
+    rotated_verts = []
+    for i in range(len(verts_data)):
+        coord = verts_data[i]
+        a = rotation_transform[0]
+        b = rotation_transform[1]
+        y = rotation_transform[2]
+        rotation_matrix = [[np.cos(a) * np.cos(b), np.cos(a) * np.sin(b) * np.sin(y) - np.sin(a) * np.cos(y), np.cos(a) * np.sin(b) * np.cos(y) + np.sin(a) * np.sin(y)],
+                           [np.sin(a) * np.cos(b), np.sin(a) * np.sin(b) * np.sin(y) + np.cos(a) * np.cos(y), np.sin(a) * np.sin(b) * np.cos(y) - np.cos(a) * np.sin(y)],
+                           [-np.sin(b), np.cos(b)*np.sin(y), np.cos(b)*np.cos(y)]]
+        rotated_coord = np.array(coord).dot(rotation_matrix)
+        rotated_verts.append(rotated_coord)
+    return rotated_verts
+
+
+def move_verts(verts_data, move_transform):
+    moved_verts = []
+    for coord in verts_data:
+        moved_vert = coord + move_transform
+        moved_verts.append(moved_vert)
+    return moved_verts
+
+
+def write_obj_strings(obj_strings):
+    with open('city_tower_d2_0369.obj', 'w') as f:
+        for string in obj_strings:
+            for line in string:
+                f.write(line)
+
 
 unpack_map()
