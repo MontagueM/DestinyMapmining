@@ -92,7 +92,8 @@ def get_transform_data(transform_hex):
     coords = []
     rotations = []
     for e in entries_hex:
-        hexes = [e[:12 * 2], e[16 * 2:28 * 2]]
+        # hexes = [e[:12 * 2], e[16 * 2:28 * 2]]
+        hexes = [e[4*2:16 * 2], e[16 * 2:28 * 2]]  # Trying out
         for k, h in enumerate(hexes):
             hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
             floats = []
@@ -104,7 +105,37 @@ def get_transform_data(transform_hex):
                 rotations.append(coord)
             else:
                 coords.append(coord)
-    return coords, rotations
+
+    # Other option from 3a7
+    transform_hex = get_hex_data(test_dir + '0369-000003A7.bin')[192 * 2:216912 * 2]
+    entries_hex = [transform_hex[i:i + 48 * 2] for i in range(0, len(transform_hex), 48 * 2)]
+    model_entries = []
+    for entry_hex in entries_hex:
+        entry_header = ModelEntry()
+        model_entries.append(get_header(entry_hex, entry_header))
+
+    coords1 = []
+    coords2 = []
+    for e in entries_hex:
+        hexes = [e[:12 * 2], e[16 * 2:28 * 2]]
+        for k, h in enumerate(hexes):
+            # print(h)
+            hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
+            floats = []
+            for hex_float in hex_floats:
+                # We don't need to worry about flipping hex as this unpack is:
+                # 1. Little Endian 2. DCBA (so reverses the direction)
+                float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
+                floats.append(round(float_value, 3))
+            # Formatting for x,y,z
+            coord = [floats[i:i + 3] for i in range(0, len(floats), 3)][0]
+            # print(coord)
+            if k == 0:
+                coords1.append(coord)
+            else:
+                coords2.append(coord)
+
+    return coords2, rotations
 
 
 def get_model_refs(model_refs_hex):
@@ -138,15 +169,18 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        # if i > 3:
-        #     return obj_strings
+        if i > 0:
+            return obj_strings
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
+        if not verts_data or not faces_data:
+            print('Skipping current model')
+            continue
         if i == 38:
             print()
         for copy_id, transform in enumerate(transform_array[1]):
             # print(f'{transform_array[0]}_{copy_id}')
-            # r_verts_data = rotate_verts(verts_data, transform[1])
+            r_verts_data = rotate_verts(verts_data, transform[1])
             # TODO fix rotating (should be r_verts_data down here)
             mr_verts_data = move_verts(verts_data, transform[0])
             adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data, max_vert_used)
@@ -172,9 +206,10 @@ def adjust_faces_data(faces_data, max_vert_used):
 
 def rotate_verts(verts_data, rotation_transform):
     rotated_verts = []
-    a = rotation_transform[0]
-    b = rotation_transform[1]
-    y = rotation_transform[2]
+    # could be cos, watch out
+    a = np.arcsin(rotation_transform[0]) * 2
+    b = np.arcsin(rotation_transform[1]) * 2
+    y = np.arcsin(rotation_transform[2]) * 2
     # print(a, b, y, rotation_transform)
     rotation_matrix = [[np.cos(a) * np.cos(b), np.cos(a) * np.sin(b) * np.sin(y) - np.sin(a) * np.cos(y),
                         np.cos(a) * np.sin(b) * np.cos(y) + np.sin(a) * np.sin(y)],
@@ -188,13 +223,10 @@ def rotate_verts(verts_data, rotation_transform):
 
 
 def move_verts(verts_data, move_transform):
-    # print(move_transform)
     moved_verts = []
     for coord in verts_data:
         moved_vert = np.array(coord) + np.array(move_transform)
-        moved_verts.append([round(x, 3) for x in moved_vert.tolist()])
-    # print(verts_data)
-    # print(moved_verts)
+        moved_verts.append([round(x, 6) for x in moved_vert.tolist()])
     return moved_verts
 
 

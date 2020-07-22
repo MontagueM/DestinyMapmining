@@ -71,18 +71,21 @@ def get_pkg_name(file):
             pkg_name = folder
             break
     else:
-        print(f'Could not find folder for {file}')
-        return
+        print(f'Could not find folder for {file}. File is likely not a model or folder does not exist.')
+        return None
     return pkg_name
 
 
 def get_referenced_file(file):
     pkg_name = get_pkg_name(file)
-
+    if not pkg_name:
+        return None, None, None
     entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG')}
     entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID')}
     ref_pkg_id = entries_refpkg[file][2:]
     ref_pkg_name = get_pkg_name(f'{ref_pkg_id}-')
+    if not ref_pkg_name:
+        return None, None, None
     entries_filetype = {x: y for x, y in pkg_db.get_entries_from_table(ref_pkg_name, 'FileName, FileType')}
 
     ref_file_name = f'{ref_pkg_id}-0000' + entries_refid[file][2:]
@@ -127,15 +130,23 @@ def get_verts_faces_data(model_file_hash):
     model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
     faces_file, verts_file = get_faces_verts_files(model_data_file)
+    if not faces_file or not verts_file:
+        return None, None
     faces_data = get_faces_data(faces_file)
     verts_data = get_verts_data(verts_file)
+    if not verts_data:
+        return None, None
     faces_data = trim_faces_data(faces_data, len(verts_data))
+    if not faces_data:
+        return None, None
     verts_data = trim_verts_data(verts_data, faces_data)
     return verts_data, faces_data
 
 
 def get_model_data_file(model_file):
     pkg_name = get_pkg_name(model_file)
+    if not pkg_name:
+        return None
     model_hex = get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
     model_data_hash = get_flipped_hex(model_hex[16:24], 8)
     return get_file_from_hash(model_data_hash)
@@ -143,14 +154,19 @@ def get_model_data_file(model_file):
 
 def get_faces_verts_files(model_data_file):
     pkg_name = get_pkg_name(model_data_file)
-    model_data_hex = get_hex_data(f'{test_dir}/{pkg_name}/{model_data_file}.bin')
+    if not pkg_name:
+        return None, None
+    try:
+        model_data_hex = get_hex_data(f'{test_dir}/{pkg_name}/{model_data_file}.bin')
+    except FileNotFoundError:
+        print(f'No folder found for file {model_data_file}. Likely need to unpack it or design versioning system.')
+        return None, None
     faces_hash = get_flipped_hex(model_data_hex[-32:-24], 8)
     verts_hash = get_flipped_hex(model_data_hex[-24:-16], 8)
     return get_file_from_hash(faces_hash), get_file_from_hash(verts_hash)
 
 
 def get_faces_data(faces_file):
-    pkg_name = get_pkg_name(faces_file)
     ref_pkg_name, ref_file, ref_file_type = get_referenced_file(faces_file)
     faces = []
     if ref_file_type == "Faces Header":
@@ -164,12 +180,13 @@ def get_faces_data(faces_file):
         return faces
     else:
         print(f'Faces: Incorrect type of file {ref_file_type} for ref file {ref_file} verts file {faces_file}')
-        quit()
-        return
+        return None
 
 
 def get_verts_data(verts_file):
     pkg_name = get_pkg_name(verts_file)
+    if not pkg_name:
+        return None
     ref_pkg_name, ref_file, ref_file_type = get_referenced_file(verts_file)
     if ref_file_type == "Stride Header":
         header_hex = get_hex_data(f'{test_dir}/{pkg_name}/{verts_file}.bin')
@@ -181,8 +198,7 @@ def get_verts_data(verts_file):
                           range(0, len(stride_hex), stride_header.StrideLength * 2)]
     else:
         print(f'Verts: Incorrect type of file {ref_file_type} for ref file {ref_file} verts file {verts_file}')
-        quit()
-        return
+        return None
 
     coords = []
     for hex_data in hex_data_split:
