@@ -92,50 +92,48 @@ def get_transform_data(transform_hex):
     coords = []
     rotations = []
     for e in entries_hex:
-        # hexes = [e[:12 * 2], e[16 * 2:28 * 2]]
-        hexes = [e[4*2:16 * 2], e[16 * 2:28 * 2]]  # Trying out
+        hexes = [e[:16 * 2], e[16 * 2:28 * 2]]
         for k, h in enumerate(hexes):
             hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
             floats = []
             for hex_float in hex_floats:
                 float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
                 floats.append(round(float_value, 3))
-            coord = [floats[i:i + 3] for i in range(0, len(floats), 3)][0]
             if k == 0:
-                rotations.append(coord)
+                rotations.append(floats)
             else:
-                coords.append(coord)
+                coords.append(floats)
 
     # Other option from 3a7
-    transform_hex = get_hex_data(test_dir + '0369-000003A7.bin')[192 * 2:216912 * 2]
-    entries_hex = [transform_hex[i:i + 48 * 2] for i in range(0, len(transform_hex), 48 * 2)]
-    model_entries = []
-    for entry_hex in entries_hex:
-        entry_header = ModelEntry()
-        model_entries.append(get_header(entry_hex, entry_header))
+    # transform_hex = get_hex_data(test_dir + '0369-000003A7.bin')[192 * 2:216912 * 2]
+    # entries_hex = [transform_hex[i:i + 48 * 2] for i in range(0, len(transform_hex), 48 * 2)]
+    # model_entries = []
+    # for entry_hex in entries_hex:
+    #     entry_header = ModelEntry()
+    #     model_entries.append(get_header(entry_hex, entry_header))
+    #
+    # coords1 = []
+    # coords2 = []
+    # for e in entries_hex:
+    #     hexes = [e[:12 * 2], e[16 * 2:28 * 2]]
+    #     for k, h in enumerate(hexes):
+    #         # print(h)
+    #         hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
+    #         floats = []
+    #         for hex_float in hex_floats:
+    #             # We don't need to worry about flipping hex as this unpack is:
+    #             # 1. Little Endian 2. DCBA (so reverses the direction)
+    #             float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
+    #             floats.append(round(float_value, 3))
+    #         # Formatting for x,y,z
+    #         coord = [floats[i:i + 3] for i in range(0, len(floats), 3)][0]
+    #         # print(coord)
+    #         if k == 0:
+    #             coords1.append(coord)
+    #         else:
+    #             coords2.append(coord)
 
-    coords1 = []
-    coords2 = []
-    for e in entries_hex:
-        hexes = [e[:12 * 2], e[16 * 2:28 * 2]]
-        for k, h in enumerate(hexes):
-            # print(h)
-            hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
-            floats = []
-            for hex_float in hex_floats:
-                # We don't need to worry about flipping hex as this unpack is:
-                # 1. Little Endian 2. DCBA (so reverses the direction)
-                float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
-                floats.append(round(float_value, 3))
-            # Formatting for x,y,z
-            coord = [floats[i:i + 3] for i in range(0, len(floats), 3)][0]
-            # print(coord)
-            if k == 0:
-                coords1.append(coord)
-            else:
-                coords2.append(coord)
-
-    return coords2, rotations
+    return coords, rotations
 
 
 def get_model_refs(model_refs_hex):
@@ -180,9 +178,8 @@ def get_model_obj_strings(transforms_array):
             print()
         for copy_id, transform in enumerate(transform_array[1]):
             # print(f'{transform_array[0]}_{copy_id}')
-            r_verts_data = rotate_verts(verts_data, transform[1])
-            # TODO fix rotating (should be r_verts_data down here)
-            mr_verts_data = move_verts(verts_data, transform[0])
+            m_verts_data = move_verts(verts_data, transform[0])
+            mr_verts_data = rotate_verts(m_verts_data, transform[1])
             adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data, max_vert_used)
             obj_str = model_unpacker.get_obj_str(adjusted_faces_data, mr_verts_data)
             obj_str = f'o {transform_array[0]}_{copy_id}\n' + obj_str
@@ -205,21 +202,25 @@ def adjust_faces_data(faces_data, max_vert_used):
 
 
 def rotate_verts(verts_data, rotation_transform):
-    rotated_verts = []
-    # could be cos, watch out
-    a = np.arcsin(rotation_transform[0]) * 2
-    b = np.arcsin(rotation_transform[1]) * 2
-    y = np.arcsin(rotation_transform[2]) * 2
-    # print(a, b, y, rotation_transform)
-    rotation_matrix = [[np.cos(a) * np.cos(b), np.cos(a) * np.sin(b) * np.sin(y) - np.sin(a) * np.cos(y),
-                        np.cos(a) * np.sin(b) * np.cos(y) + np.sin(a) * np.sin(y)],
-                       [np.sin(a) * np.cos(b), np.sin(a) * np.sin(b) * np.sin(y) + np.cos(a) * np.cos(y),
-                        np.sin(a) * np.sin(b) * np.cos(y) - np.cos(a) * np.sin(y)],
-                       [-np.sin(b), np.cos(b) * np.sin(y), np.cos(b) * np.cos(y)]]
+    quat_rots = []
+
+    w = rotation_transform[0]
+    x = rotation_transform[1]
+    y = rotation_transform[2]
+    z = rotation_transform[3]
     for coord in verts_data:
-        rotated_coord = np.array(coord).dot(rotation_matrix)
-        rotated_verts.append(rotated_coord)
-    return rotated_verts
+        x_old = coord[0]
+        y_old = coord[1]
+        z_old = coord[2]
+
+        # Could be more efficient to use matmul??
+        x_new = ((1 - 2*y*y -2*z*z)*x_old + (2*x*y + 2*w*z)*y_old + (2*x*z-2*w*y)*z_old)
+        y_new = ((2*x*y - 2*w*z)*x_old + (1 - 2*x*x - 2*z*z)*y_old + (2*y*z + 2*w*x)*z_old)
+        z_new = ((2*x*z + 2*w*y)*x_old + (2*y*z - 2*w*x)*y_old + (1 - 2*x*x - 2*y*y)*z_old)
+        quat_rot = [x_new, y_new, z_new]
+        quat_rots.append(quat_rot)
+
+    return quat_rots
 
 
 def move_verts(verts_data, move_transform):

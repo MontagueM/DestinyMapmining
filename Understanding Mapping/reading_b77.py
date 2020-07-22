@@ -107,15 +107,19 @@ def testing_quaternion_rotation(c, rot):
     x_new = ((1 - 2*y*y -2*z*z)*x_old + (2*x*y + 2*w*z)*y_old + (2*x*z-2*w*y)*z_old)
     y_new = ((2*x*y - 2*w*z)*x_old + (1 - 2*x*x - 2*z*z)*y_old + (2*y*z + 2*w*x)*z_old)
     z_new = ((2*x*z + 2*w*y)*x_old + (2*y*z - 2*w*x)*y_old + (1 - 2*x*x - 2*y*y)*z_old)
-    quat_rot = [x_new, y_new, z_new]
+    quat_rot = [round(x_new, 6), round(y_new, 6), round(z_new, 6)]
     print(f'New coord: {quat_rot}')
     return quat_rot
 
 
 [print(coords1[i], coords2[i], coords3[i]) for i in range(len(coords1))]
 
+# Vertex 1 and 2
 testing_quaternion_rotation([-90.20191955566406, 64.19730377197266, -21.946565628051758], [1.3622425373667414e-15, -4.019110348349453e-15, 0.7071065306663513, 0.7071070075035095])
-testing_quaternion_rotation([-90.24580383300781, 59.197303771972656, -21.946565628051758], [1.3622425373667414e-15, -4.019110348349453e-15, 0.7071065306663513, 0.7071070075035095])
-testing_quaternion_rotation([-89.95956420898438, 64.19730377197266, -20.933547973632812], [1.3622425373667414e-15, -4.019110348349453e-15, 0.7071065306663513, 0.7071070075035095])
+testing_quaternion_rotation([-93.43220520019531, 65.24137878417969, -26.449851989746094], [1.3622425373667414e-15, -4.019110348349453e-15, 0.7071065306663513, 0.7071070075035095])
+
+
+# testing_quaternion_rotation([-90.24580383300781, 59.197303771972656, -21.946565628051758], [1.3622425373667414e-15, -4.019110348349453e-15, 0.7071065306663513, 0.7071070075035095])
+# testing_quaternion_rotation([-89.95956420898438, 64.19730377197266, -20.933547973632812], [1.3622425373667414e-15, -4.019110348349453e-15, 0.7071065306663513, 0.7071070075035095])
 # print(sorted(coords, key=lambda x: x[2], reverse=True))
 # print(sorted(rotations, key=lambda x: x[0], reverse=True))
