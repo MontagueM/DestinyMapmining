@@ -167,7 +167,7 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        if i > 0:
+        if i > 20:
             return obj_strings
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
@@ -234,8 +234,10 @@ def move_verts(verts_data, move_transform):
 def write_obj_strings(obj_strings):
     with open('unpacked_objects/city_tower_d2_0369.obj', 'w') as f:
         for string in obj_strings:
-            for line in string:
-                f.write(line)
+            f.write(string)
+        # for string in obj_strings:
+        #     for line in string:
+        #         f.write(line)
     print('Written to file.')
 
 unpack_map()
