@@ -150,16 +150,20 @@ def get_copy_counts(copy_count_hex):
 
 
 def get_transforms_array(model_refs, copy_counts, coords, rotations):
+    print(coords[-1])
     transforms_array = []
-    model_dict = dict(zip(model_refs, copy_counts))
     last_index = 0
-    for model, copies in model_dict.items():
+    for i, model in enumerate(model_refs):
+        copies = copy_counts[i]
         transforms = []
+        print(last_index, len(coords))
+        print(copies)
         for copy_id in range(copies):
             transforms.append([coords[last_index + copy_id], rotations[last_index + copy_id]])
-        last_index = copies
+        last_index += copies
         transform_array = [model, transforms]
         transforms_array.append(transform_array)
+    print(last_index, len(coords))
     return transforms_array
 
 
@@ -167,21 +171,20 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        if i > 20:
+        if i > 100:
             return obj_strings
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
         if not verts_data or not faces_data:
             print('Skipping current model')
             continue
-        if i == 38:
-            print()
         for copy_id, transform in enumerate(transform_array[1]):
             # print(f'{transform_array[0]}_{copy_id}')
-            m_verts_data = move_verts(verts_data, transform[0])
-            mr_verts_data = rotate_verts(m_verts_data, transform[1])
+            # s_verts_data = scale_verts(verts_data)
+            sm_verts_data = move_verts(verts_data, transform[0])
+            smr_verts_data = rotate_verts(sm_verts_data, transform[1])
             adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data, max_vert_used)
-            obj_str = model_unpacker.get_obj_str(adjusted_faces_data, mr_verts_data)
+            obj_str = model_unpacker.get_obj_str(adjusted_faces_data, smr_verts_data)
             obj_str = f'o {transform_array[0]}_{copy_id}\n' + obj_str
             obj_strings.append(obj_str)
     return obj_strings
@@ -190,14 +193,12 @@ def get_model_obj_strings(transforms_array):
 def adjust_faces_data(faces_data, max_vert_used):
     new_faces_data = []
     all_v = []
-    # print()
     for face in faces_data:
         new_face = []
         for v in face:
             new_face.append(v + max_vert_used)
             all_v.append(v + max_vert_used)
         new_faces_data.append(new_face)
-    u = max(all_v)
     return new_faces_data, max(all_v)
 
 
@@ -231,6 +232,11 @@ def move_verts(verts_data, move_transform):
     return moved_verts
 
 
+def scale_verts(verts_data):
+    verts_data = [(np.array(x)*7.03).tolist() for x in verts_data]
+    return verts_data
+
+
 def write_obj_strings(obj_strings):
     with open('unpacked_objects/city_tower_d2_0369.obj', 'w') as f:
         for string in obj_strings:
@@ -240,4 +246,6 @@ def write_obj_strings(obj_strings):
         #         f.write(line)
     print('Written to file.')
 
-unpack_map()
+
+if __name__ == '__main__':
+    unpack_map()
