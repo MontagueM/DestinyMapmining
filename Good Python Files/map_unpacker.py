@@ -3,6 +3,7 @@ import numpy as np
 import binascii
 import struct
 import model_unpacker
+import scipy.spatial
 
 
 test_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/city_tower_d2_0369/'
@@ -171,7 +172,7 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        if i > 100:
+        if i > 0:
             return obj_strings
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
@@ -203,23 +204,12 @@ def adjust_faces_data(faces_data, max_vert_used):
 
 
 def rotate_verts(verts_data, rotation_transform):
-    quat_rots = []
-
     w = rotation_transform[0]
     x = rotation_transform[1]
     y = rotation_transform[2]
     z = rotation_transform[3]
-    for coord in verts_data:
-        x_old = coord[0]
-        y_old = coord[1]
-        z_old = coord[2]
-
-        # Could be more efficient to use matmul??
-        x_new = ((1 - 2*y*y -2*z*z)*x_old + (2*x*y + 2*w*z)*y_old + (2*x*z-2*w*y)*z_old)
-        y_new = ((2*x*y - 2*w*z)*x_old + (1 - 2*x*x - 2*z*z)*y_old + (2*y*z + 2*w*x)*z_old)
-        z_new = ((2*x*z + 2*w*y)*x_old + (2*y*z - 2*w*x)*y_old + (1 - 2*x*x - 2*y*y)*z_old)
-        quat_rot = [x_new, y_new, z_new]
-        quat_rots.append(quat_rot)
+    r = scipy.spatial.transform.Rotation.from_quat([x, y, z, w])
+    quat_rots = scipy.spatial.transform.Rotation.apply(r, verts_data, inverse=True)
 
     return quat_rots
 
