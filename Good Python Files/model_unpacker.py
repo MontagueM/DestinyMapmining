@@ -126,21 +126,27 @@ def get_model(model_file_hash):
 
 
 def get_verts_faces_data(model_file_hash):
+    all_faces_data = []
+    all_verts_data = []
     pkg_db.start_db_connection('2_9_0_1')
     model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
-    faces_file, verts_file = get_faces_verts_files(model_data_file)
-    if not faces_file or not verts_file:
-        return None, None
-    faces_data = get_faces_data(faces_file)
-    verts_data = get_verts_data(verts_file)
-    if not verts_data:
-        return None, None
-    faces_data = trim_faces_data(faces_data, len(verts_data))
-    if not faces_data:
-        return None, None
-    verts_data = trim_verts_data(verts_data, faces_data)
-    return verts_data, faces_data
+    faces_files, verts_files = get_faces_verts_files(model_data_file)
+    for i, faces_file in enumerate(faces_files):
+        verts_file = verts_files[i]
+        if not faces_file or not verts_file:
+            return None, None
+        faces_data = get_faces_data(faces_file)
+        verts_data = get_verts_data(verts_file)
+        if not verts_data:
+            return None, None
+        faces_data = trim_faces_data(faces_data, len(verts_data))
+        if not faces_data:
+            return None, None
+        verts_data = trim_verts_data(verts_data, faces_data)
+        all_faces_data.append(faces_data)
+        all_verts_data.append(verts_data)
+    return all_verts_data, all_faces_data
 
 
 def get_model_data_file(model_file):
@@ -153,6 +159,8 @@ def get_model_data_file(model_file):
 
 
 def get_faces_verts_files(model_data_file):
+    faces_files = []
+    verts_files = []
     pkg_name = get_pkg_name(model_data_file)
     if not pkg_name:
         return None, None
@@ -161,9 +169,16 @@ def get_faces_verts_files(model_data_file):
     except FileNotFoundError:
         print(f'No folder found for file {model_data_file}. Likely need to unpack it or design versioning system.')
         return None, None
-    faces_hash = get_flipped_hex(model_data_hex[-32:-24], 8)
-    verts_hash = get_flipped_hex(model_data_hex[-24:-16], 8)
-    return get_file_from_hash(faces_hash), get_file_from_hash(verts_hash)
+    split_hex = model_data_hex.split('BD9F8080')[-1]
+    model_count = int(get_flipped_hex(split_hex[:4], 4), 16)
+    relevant_hex = split_hex[32:]
+    for i in range(model_count):
+        faces_hash = get_flipped_hex(relevant_hex[32*i:32*i+8], 8)
+        verts_hash = get_flipped_hex(relevant_hex[32*i+8:32*i+16], 8)
+        faces_file, verts_file = get_file_from_hash(faces_hash), get_file_from_hash(verts_hash)
+        faces_files.append(faces_file)
+        verts_files.append(verts_file)
+    return faces_files, verts_files
 
 
 def get_faces_data(faces_file):

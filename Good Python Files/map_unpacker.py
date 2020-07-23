@@ -10,21 +10,6 @@ test_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/city_tower_d2_0
 
 
 @dataclass
-class ModelEntry:
-    Field0: np.uint32 = np.uint32(0)
-    Field4: np.uint32 = np.uint32(0)
-    Field8: np.uint32 = np.uint32(0)
-    FieldC: np.uint32 = np.uint32(0)
-    Field10: np.uint32 = np.uint32(0)
-    Field14: np.uint32 = np.uint32(0)
-    Field18: np.uint32 = np.uint32(0)
-    Field1C: np.uint32 = np.uint32(0)
-    Field20: np.uint32 = np.uint32(0)
-    Field24: np.uint32 = np.uint32(0)
-    Field28: np.uint32 = np.uint32(0)
-
-
-@dataclass
 class CountEntry:
     Field0: np.uint16 = np.uint32(0)
     Field2: np.uint32 = np.uint32(0)
@@ -66,12 +51,6 @@ hex_data = get_hex_data(test_dir + a_166d_file + '.bin')
 
 
 def unpack_map():
-    """
-    Need to add scale?
-    In order to put all .obj into a single file I need to change the numbers to account for the number of vertices already in file.
-    eg 1// 2// 3// needs to change to 1+number of verts before this// 2+number of verts before this// etc etc
-    """
-    # Need to add scale
     transform_hex = hex_data[192 * 2:216912 * 2]
     coords, rotations, scales = get_transform_data(transform_hex)
     model_refs_hex = hex_data[216944*2:219076*2]
@@ -85,10 +64,6 @@ def unpack_map():
 
 def get_transform_data(transform_hex):
     entries_hex = [transform_hex[i:i + 48 * 2] for i in range(0, len(transform_hex), 48 * 2)]
-    model_entries = []
-    for entry_hex in entries_hex:
-        entry_header = ModelEntry()
-        model_entries.append(get_header(entry_hex, entry_header))
 
     coords = []
     rotations = []
@@ -191,20 +166,22 @@ def get_model_obj_strings(transforms_array):
         #     return obj_strings
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
-        if not verts_data or not faces_data:
+        if len(verts_data) == 0 or len(faces_data) == 0:
             print('Skipping current model')
             continue
+        max_hash_index = len(verts_data)
         for copy_id, transform in enumerate(transform_array[1]):
-            # print(f'{transform_array[0]}_{copy_id}')
-            s_verts_data = scale_verts(verts_data, transform[2])
-            # Just testing
-            # r_verts_data = rotate_verts(verts_data, [1, 0, 0, 1])
-            sm_verts_data = move_verts(s_verts_data, transform[0])
-            smr_verts_data = rotate_verts(sm_verts_data, transform[1])
-            adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data, max_vert_used)
-            obj_str = model_unpacker.get_obj_str(adjusted_faces_data, smr_verts_data)
-            obj_str = f'o {transform_array[0]}_{copy_id}\n' + obj_str
-            obj_strings.append(obj_str)
+            for hsh_index in range(max_hash_index):
+                # print(f'{transform_array[0]}_{copy_id}')
+                s_verts_data = scale_verts(verts_data[hsh_index], transform[2])
+                # Just testing
+                # r_verts_data = rotate_verts(verts_data, [1, 0, 0, 1])
+                sm_verts_data = move_verts(s_verts_data, transform[0])
+                smr_verts_data = rotate_verts(sm_verts_data, transform[1])
+                adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
+                obj_str = model_unpacker.get_obj_str(adjusted_faces_data, smr_verts_data)
+                obj_str = f'o {transform_array[0]}_{copy_id}_{hsh_index}\n' + obj_str
+                obj_strings.append(obj_str)
     return obj_strings
 
 
