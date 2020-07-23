@@ -151,7 +151,7 @@ def get_transforms_array(model_refs, copy_counts, coords, rotations, scales):
         # print(last_index, len(coords))
         # print(copies)
         for copy_id in range(copies):
-            print(model, copy_id, coords[last_index + copy_id], rotations[last_index + copy_id], rotate_verts([coords[last_index + copy_id]], rotations[last_index + copy_id]))
+            # print(model, copy_id, coords[last_index + copy_id], rotations[last_index + copy_id], rotate_verts([coords[last_index + copy_id]], rotations[last_index + copy_id]))
             transforms.append([coords[last_index + copy_id], rotations[last_index + copy_id], scales[last_index + copy_id]])
         last_index += copies
         transform_array = [model, transforms]
@@ -177,10 +177,10 @@ def get_model_obj_strings(transforms_array):
         for copy_id, transform in enumerate(transform_array[1]):
             for hsh_index in range(max_hash_index):
                 # print(f'{transform_array[0]}_{copy_id}')
-                r_verts_data = rotate_verts(verts_data[hsh_index], transform[1])
+                r_verts_data = rotate_verts(verts_data[hsh_index], transform[1], b_local=True)
                 # s_verts_data = scale_verts(verts_data[hsh_index], transform[2])
                 # Just testing
-                sm_verts_data = move_verts(r_verts_data, rotate_verts(transform[0], transform[1]))
+                sm_verts_data = move_verts(r_verts_data, rotate_verts(transform[0], transform[1], b_local=False))
                 print(transform, sm_verts_data[0])
                 # smr_verts_data = rotate_verts(sm_verts_data, transform[1])
                 adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
@@ -202,13 +202,24 @@ def adjust_faces_data(faces_data, max_vert_used):
     return new_faces_data, max(all_v)
 
 
-def rotate_verts(verts_data, rotation_transform):
-    w = abs(rotation_transform[0])
-    x = rotation_transform[1]
-    y = rotation_transform[2]
-    z = rotation_transform[3]
-    r = scipy.spatial.transform.Rotation.from_quat([x, y, z, w])
-    quat_rots = scipy.spatial.transform.Rotation.apply(r, verts_data, inverse=False)
+def rotate_verts(verts_data, rotation_transform, b_local):
+    if b_local:
+        # if rotation_transform[0] == -0.0:
+        #     rotation_transform = [-x for x in rotation_transform]
+        # w = rotation_transform[0]
+        # x = rotation_transform[1]
+        # y = rotation_transform[2]
+        # z = rotation_transform[3]
+
+        x = rotation_transform[0]
+        y = rotation_transform[2]
+        z = rotation_transform[1]
+        w = rotation_transform[3]
+
+        r = scipy.spatial.transform.Rotation.from_quat([x, y, z, w])
+        quat_rots = scipy.spatial.transform.Rotation.apply(r, [[-x[0], x[2], x[1]] for x in verts_data], inverse=False)
+    else:
+        quat_rots = [-verts_data[0], verts_data[2], verts_data[1]]
     return quat_rots
 
 
