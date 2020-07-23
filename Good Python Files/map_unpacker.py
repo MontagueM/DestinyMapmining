@@ -165,8 +165,8 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        if i > 0:
-            return obj_strings
+        # if i > 100:
+        #     return obj_strings
         # elif i < 350:
         #     continue
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
@@ -210,9 +210,9 @@ def set_vert_locations(verts, scale_info):
         for point in t:
             c_range = c_max - c_min
             interp = ((point - t_min) / t_range) * c_range + c_min
-            print(interp)
+            # print(interp)
             output[i].append(interp)
-    print()
+    # print()
     return [[-output[0][i], output[2][i], output[1][i]] for i in range(len(x))]
 
 
