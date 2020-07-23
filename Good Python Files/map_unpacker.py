@@ -123,9 +123,10 @@ def get_transform_data(transform_hex):
         modifiers.append(modifier)
     ###
     sub = np.array(coords2) - np.array(coords1)
+    # TODO figure out what to do with modifier stuff
     scale_factors = [[round(x, 4) for x in sub[i] / np.array(modifiers[i])] for i in range(len(sub))]
-
-    return coords, rotations, scale_factors
+    scale_coords = [[coords1[i], coords2[i]] for i in range(len(coords1))]
+    return coords, rotations, scale_coords
 
 
 def get_model_refs(model_refs_hex):
@@ -164,7 +165,7 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        if i > 1:
+        if i > 0:
             return obj_strings
         # elif i < 350:
         #     continue
@@ -177,17 +178,42 @@ def get_model_obj_strings(transforms_array):
         for copy_id, transform in enumerate(transform_array[1]):
             for hsh_index in range(max_hash_index):
                 # print(f'{transform_array[0]}_{copy_id}')
-                r_verts_data = rotate_verts(verts_data[hsh_index], transform[1], b_local=True)
-                # s_verts_data = scale_verts(verts_data[hsh_index], transform[2])
+                sr_verts_data = rotate_verts(verts_data[hsh_index], transform[1], b_local=True)
                 # Just testing
-                sm_verts_data = move_verts(r_verts_data, rotate_verts(transform[0], transform[1], b_local=False))
-                print(transform, sm_verts_data[0])
-                # smr_verts_data = rotate_verts(sm_verts_data, transform[1])
+                # rsm_verts_data = move_verts(sr_verts_data, rotate_verts(transform[0], transform[1], b_local=False))
+                test_loc_verts = set_vert_locations(sr_verts_data, transform[2])
                 adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
-                obj_str = model_unpacker.get_obj_str(adjusted_faces_data, sm_verts_data)
+                obj_str = model_unpacker.get_obj_str(adjusted_faces_data, test_loc_verts)
                 obj_str = f'o {transform_array[0]}_{copy_id}_{hsh_index}\n' + obj_str
                 obj_strings.append(obj_str)
     return obj_strings
+
+
+def set_vert_locations(verts, scale_info):
+    # It could be an option to swap the X values and make positive for coords1 and coords2 in case I think it needs to be swapped
+    coords1 = scale_info[0]
+    coords2 = scale_info[1]
+    # coords1_ = coords1
+    # coords1 = [-coords2[0], coords1[1], coords1[2]]
+    # coords2 = [-coords1_[0], coords1_[1], coords1_[2]]
+    x = [x[0] for x in verts]
+    y = [x[1] for x in verts]
+    z = [x[2] for x in verts]
+    output = [[], [], []]
+    loop = [x, y, z]
+    for i, t in enumerate(loop):
+        t_max = max(t)
+        t_min = min(t)
+        c_min = coords1[i]
+        c_max = coords2[i]
+        t_range = t_max - t_min
+        for point in t:
+            c_range = c_max - c_min
+            interp = ((point - t_min) / t_range) * c_range + c_min
+            print(interp)
+            output[i].append(interp)
+    print()
+    return [[-output[0][i], output[2][i], output[1][i]] for i in range(len(x))]
 
 
 def adjust_faces_data(faces_data, max_vert_used):
@@ -212,12 +238,12 @@ def rotate_verts(verts_data, rotation_transform, b_local):
         # z = rotation_transform[3]
 
         x = rotation_transform[0]
-        y = rotation_transform[2]
-        z = rotation_transform[1]
+        y = rotation_transform[1]
+        z = rotation_transform[2]
         w = rotation_transform[3]
 
         r = scipy.spatial.transform.Rotation.from_quat([x, y, z, w])
-        quat_rots = scipy.spatial.transform.Rotation.apply(r, [[-x[0], x[2], x[1]] for x in verts_data], inverse=False)
+        quat_rots = scipy.spatial.transform.Rotation.apply(r, [[-x[0], x[1], x[2]] for x in verts_data], inverse=False)
     else:
         quat_rots = [-verts_data[0], verts_data[2], verts_data[1]]
     return quat_rots
@@ -232,7 +258,8 @@ def move_verts(verts_data, move_transform):
 
 
 def scale_verts(verts_data, scale_transform):
-    return np.multiply(scale_transform, verts_data)
+    print(verts_data, scale_transform)
+    return np.multiply([scale_transform[0], scale_transform[2], scale_transform[1]], verts_data)
 
 
 def write_obj_strings(obj_strings):
