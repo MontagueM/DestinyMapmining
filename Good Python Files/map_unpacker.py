@@ -75,6 +75,7 @@ def get_transform_data(transform_hex):
             for hex_float in hex_floats:
                 float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
                 floats.append(round(float_value, 3))
+                # floats.append(float_value)
             if k == 0:
                 rotations.append(floats)
             else:
@@ -150,6 +151,7 @@ def get_transforms_array(model_refs, copy_counts, coords, rotations, scales):
         # print(last_index, len(coords))
         # print(copies)
         for copy_id in range(copies):
+            print(model, copy_id, coords[last_index + copy_id], rotations[last_index + copy_id], rotate_verts([coords[last_index + copy_id]], rotations[last_index + copy_id]))
             transforms.append([coords[last_index + copy_id], rotations[last_index + copy_id], scales[last_index + copy_id]])
         last_index += copies
         transform_array = [model, transforms]
@@ -162,8 +164,8 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        # if i > 390:
-        #     return obj_strings
+        if i > 1:
+            return obj_strings
         # elif i < 350:
         #     continue
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
@@ -175,13 +177,14 @@ def get_model_obj_strings(transforms_array):
         for copy_id, transform in enumerate(transform_array[1]):
             for hsh_index in range(max_hash_index):
                 # print(f'{transform_array[0]}_{copy_id}')
-                s_verts_data = scale_verts(verts_data[hsh_index], transform[2])
+                r_verts_data = rotate_verts(verts_data[hsh_index], transform[1])
+                # s_verts_data = scale_verts(verts_data[hsh_index], transform[2])
                 # Just testing
-                # r_verts_data = rotate_verts(verts_data, [1, 0, 0, 1])
-                sm_verts_data = move_verts(s_verts_data, transform[0])
-                smr_verts_data = rotate_verts(sm_verts_data, transform[1])
+                sm_verts_data = move_verts(r_verts_data, rotate_verts(transform[0], transform[1]))
+                print(transform, sm_verts_data[0])
+                # smr_verts_data = rotate_verts(sm_verts_data, transform[1])
                 adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
-                obj_str = model_unpacker.get_obj_str(adjusted_faces_data, smr_verts_data)
+                obj_str = model_unpacker.get_obj_str(adjusted_faces_data, sm_verts_data)
                 obj_str = f'o {transform_array[0]}_{copy_id}_{hsh_index}\n' + obj_str
                 obj_strings.append(obj_str)
     return obj_strings
@@ -200,7 +203,7 @@ def adjust_faces_data(faces_data, max_vert_used):
 
 
 def rotate_verts(verts_data, rotation_transform):
-    w = rotation_transform[0]
+    w = abs(rotation_transform[0])
     x = rotation_transform[1]
     y = rotation_transform[2]
     z = rotation_transform[3]
