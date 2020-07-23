@@ -162,11 +162,13 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        # if i > 100:
+        # if i > 390:
         #     return obj_strings
+        # elif i < 350:
+        #     continue
         print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
-        if len(verts_data) == 0 or len(faces_data) == 0:
+        if not verts_data or not faces_data:
             print('Skipping current model')
             continue
         max_hash_index = len(verts_data)

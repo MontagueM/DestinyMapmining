@@ -132,10 +132,10 @@ def get_verts_faces_data(model_file_hash):
     model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
     faces_files, verts_files = get_faces_verts_files(model_data_file)
+    if not faces_files or not verts_files:
+        return None, None
     for i, faces_file in enumerate(faces_files):
         verts_file = verts_files[i]
-        if not faces_file or not verts_file:
-            return None, None
         faces_data = get_faces_data(faces_file)
         verts_data = get_verts_data(verts_file)
         if not verts_data:
@@ -175,6 +175,8 @@ def get_faces_verts_files(model_data_file):
     for i in range(model_count):
         faces_hash = get_flipped_hex(relevant_hex[32*i:32*i+8], 8)
         verts_hash = get_flipped_hex(relevant_hex[32*i+8:32*i+16], 8)
+        if faces_hash == '' or verts_hash == '':
+            return None, None
         faces_file, verts_file = get_file_from_hash(faces_hash), get_file_from_hash(verts_hash)
         faces_files.append(faces_file)
         verts_files.append(verts_file)
