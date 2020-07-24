@@ -43,12 +43,10 @@ def get_header(file_hex, header):
 
 
 def unpack_map(pkg_folder_name):
-    main_hex, scale_hex = get_hex_from_pkg(pkg_folder_name)
-    transform_hex = main_hex[192 * 2:216912 * 2]
+    scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(pkg_folder_name)
+
     rotations, scales = get_transform_data(transform_hex, scale_hex)
-    model_refs_hex = main_hex[216944*2:219076*2]
     model_refs = get_model_refs(model_refs_hex)
-    copy_count_hex = main_hex[219104*2:]
     copy_counts = get_copy_counts(copy_count_hex)
     transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales)
     obj_strings = get_model_obj_strings(transforms_array)
@@ -57,11 +55,25 @@ def unpack_map(pkg_folder_name):
 
 def get_hex_from_pkg(folder):
     pkgs_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/'
-    a_166d_file = '0369-00000B77'
+    a_166d_file = '0369-00001B0F'
     main_hex = get_hex_data(f'{pkgs_dir}/{folder}/{a_166d_file}.bin')
     scales_file = get_scales_file(main_hex)
     scale_hex = get_hex_data(f'{pkgs_dir}/{folder}/{scales_file}.bin')[48 * 2:]
-    return main_hex, scale_hex
+
+    transform_count = int(get_flipped_hex(main_hex[64*2:64*2+4], 4), 16)
+    transform_offset = 192
+    transform_length = transform_count*48
+    transform_hex = main_hex[transform_offset*2:transform_offset*2 + transform_length*2]
+
+    entry_count = int(get_flipped_hex(main_hex[88*2:88*2+4], 4), 16)
+    model_offset = transform_offset + transform_length + 32
+    model_length = entry_count * 4
+    model_refs_hex = main_hex[model_offset*2:model_offset*2 + model_length*2]
+
+    copy_offset = model_offset + model_length + int(main_hex[model_offset*2+model_length*2:].find('90718080')/2) + 8
+    copy_count_hex = main_hex[copy_offset*2:]
+
+    return scale_hex, transform_hex, model_refs_hex, copy_count_hex
 
 
 def get_scales_file(main_hex):
@@ -230,7 +242,8 @@ def scale_verts(verts_data, scale_transform):
 
 
 def write_obj_strings(obj_strings):
-    with open('unpacked_objects/city_tower_d2_0369.obj', 'w') as f:
+    #city_tower_d2_0369
+    with open('unpacked_objects/test.obj', 'w') as f:
         for string in obj_strings:
             f.write(string)
     print('Written to file.')

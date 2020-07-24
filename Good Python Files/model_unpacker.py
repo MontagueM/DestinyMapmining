@@ -65,6 +65,9 @@ test_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all'
 
 
 def get_pkg_name(file):
+    if not file:
+        print(f'{file} is invalid.')
+        return None
     pkg_id = file.split('-')[0]
     for folder in os.listdir(test_dir):
         if pkg_id.lower() in folder.lower():
@@ -140,9 +143,9 @@ def get_verts_faces_data(model_file_hash):
         verts_data = get_verts_data(verts_file)
         if not verts_data:
             return None, None
-        faces_data = trim_faces_data(faces_data, len(verts_data))
         if not faces_data:
             return None, None
+        faces_data = trim_faces_data(faces_data, len(verts_data))
         verts_data = trim_verts_data(verts_data, faces_data)
         all_faces_data.append(faces_data)
         all_verts_data.append(verts_data)
