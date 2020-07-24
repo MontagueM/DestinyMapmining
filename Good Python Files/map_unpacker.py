@@ -42,8 +42,8 @@ def get_header(file_hex, header):
     return header
 
 
-def unpack_map(pkg_folder_name, main_file):
-    scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(pkg_folder_name, main_file)
+def unpack_map(main_file):
+    scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file)
 
     rotations, scales = get_transform_data(transform_hex, scale_hex)
     model_refs = get_model_refs(model_refs_hex)
@@ -53,11 +53,14 @@ def unpack_map(pkg_folder_name, main_file):
     write_obj_strings(obj_strings)
 
 
-def get_hex_from_pkg(file, folder):
-    pkgs_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/'
-    main_hex = get_hex_data(f'{pkgs_dir}/{folder}/{file}.bin')
+def get_hex_from_pkg(file):
+    pkgs_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all'
+
+    main_pkg = model_unpacker.get_pkg_name(file)
+    main_hex = get_hex_data(f'{pkgs_dir}/{main_pkg}/{file}.bin')
     scales_file = get_scales_file(main_hex)
-    scale_hex = get_hex_data(f'{pkgs_dir}/{folder}/{scales_file}.bin')[48 * 2:]
+    scales_pkg = model_unpacker.get_pkg_name(scales_file)
+    scale_hex = get_hex_data(f'{pkgs_dir}/{scales_pkg}/{scales_file}.bin')[48 * 2:]
 
     transform_count = int(get_flipped_hex(main_hex[64*2:64*2+4], 4), 16)
     transform_offset = 192
@@ -249,4 +252,4 @@ def write_obj_strings(obj_strings):
 
 
 if __name__ == '__main__':
-    unpack_map('city_tower_d2_0369', '0369-00001B0F')
+    unpack_map('036A-0000153E')

@@ -141,11 +141,13 @@ def get_verts_faces_data(model_file_hash):
         verts_file = verts_files[i]
         faces_data = get_faces_data(faces_file)
         verts_data = get_verts_data(verts_file)
-        if not verts_data:
+        if not verts_data or verts_data == []:
             return None, None
-        if not faces_data:
+        if not faces_data or faces_data == []:
             return None, None
         faces_data = trim_faces_data(faces_data, len(verts_data))
+        if not faces_data or faces_data == []:
+            return None, None
         verts_data = trim_verts_data(verts_data, faces_data)
         all_faces_data.append(faces_data)
         all_verts_data.append(verts_data)
