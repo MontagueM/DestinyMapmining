@@ -1,12 +1,8 @@
 from dataclasses import dataclass, fields
 import numpy as np
-import binascii
 import struct
 import model_unpacker
 import scipy.spatial
-
-
-test_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/city_tower_d2_0369/'
 
 
 @dataclass
@@ -60,10 +56,18 @@ def unpack_map(pkg_folder_name):
 
 
 def get_hex_from_pkg(folder):
+    pkgs_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all/'
     a_166d_file = '0369-00000B77'
-    main_hex = get_hex_data(test_dir + a_166d_file + '.bin')
-    scale_hex = get_hex_data(test_dir + '0369-000003A7.bin')[48 * 2:]
+    main_hex = get_hex_data(f'{pkgs_dir}/{folder}/{a_166d_file}.bin')
+    scales_file = get_scales_file(main_hex)
+    scale_hex = get_hex_data(f'{pkgs_dir}/{folder}/{scales_file}.bin')[48 * 2:]
     return main_hex, scale_hex
+
+
+def get_scales_file(main_hex):
+    file_hash = main_hex[24*2:24*2+8]
+    file_name = model_unpacker.get_file_from_hash(get_flipped_hex(file_hash, 8))
+    return file_name
 
 
 def get_transform_data(transform_hex, scale_hex):
@@ -164,7 +168,7 @@ def get_model_obj_strings(transforms_array):
         print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]} {max_hash_index-1}')
         for copy_id, transform in enumerate(transform_array[1]):
             for hsh_index in range(max_hash_index):
-                sr_verts_data = rotate_verts(verts_data[hsh_index], transform[0], b_local=True)
+                sr_verts_data = rotate_verts(verts_data[hsh_index], transform[0])
                 test_loc_verts = set_vert_locations(sr_verts_data, transform[1])
                 adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
                 obj_str = model_unpacker.get_obj_str(adjusted_faces_data, test_loc_verts)
@@ -174,12 +178,8 @@ def get_model_obj_strings(transforms_array):
 
 
 def set_vert_locations(verts, scale_info):
-    # It could be an option to swap the X values and make positive for coords1 and coords2 in case I think it needs to be swapped
     coords1 = scale_info[0]
     coords2 = scale_info[1]
-    # coords1_ = coords1
-    # coords1 = [-coords2[0], coords1[1], coords1[2]]
-    # coords2 = [-coords1_[0], coords1_[1], coords1_[2]]
     x = [x[0] for x in verts]
     y = [x[1] for x in verts]
     z = [x[2] for x in verts]
@@ -194,9 +194,7 @@ def set_vert_locations(verts, scale_info):
         for point in t:
             c_range = c_max - c_min
             interp = ((point - t_min) / t_range) * c_range + c_min
-            # print(interp)
             output[i].append(interp)
-    # print()
     return [[-output[0][i], output[2][i], output[1][i]] for i in range(len(x))]
 
 
@@ -212,28 +210,9 @@ def adjust_faces_data(faces_data, max_vert_used):
     return new_faces_data, max(all_v)
 
 
-def rotate_verts(verts_data, rotation_transform, b_local):
-    if b_local:
-        # if rotation_transform[3] < 0 or rotation_transform[3] == -0.0:
-        #     rotation_transform = [-x for x in rotation_transform]
-        # w = rotation_transform[0]
-        # x = rotation_transform[1]
-        # y = rotation_transform[2]
-        # z = rotation_transform[3]
-
-        x = rotation_transform[0]
-        y = rotation_transform[1]
-        z = rotation_transform[2]
-        w = rotation_transform[3]
-
-        # if w < 0 or w == -0.0:
-        #     w = -w
-
-        r = scipy.spatial.transform.Rotation.from_quat([x, y, z, w])
-        # print(f'Actually rot with {[x, y, z, w]}')
-        quat_rots = scipy.spatial.transform.Rotation.apply(r, [[x[0], x[1], x[2]] for x in verts_data], inverse=False)
-    else:
-        quat_rots = [-verts_data[0], verts_data[2], verts_data[1]]
+def rotate_verts(verts_data, rotation_transform):
+    r = scipy.spatial.transform.Rotation.from_quat(rotation_transform)
+    quat_rots = scipy.spatial.transform.Rotation.apply(r, [[x[0], x[1], x[2]] for x in verts_data], inverse=False)
     return quat_rots
 
 
@@ -258,4 +237,4 @@ def write_obj_strings(obj_strings):
 
 
 if __name__ == '__main__':
-    unpack_map('')
+    unpack_map('city_tower_d2_0369')
