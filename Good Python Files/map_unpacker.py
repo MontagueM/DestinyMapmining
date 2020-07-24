@@ -46,55 +46,50 @@ def get_header(file_hex, header):
     return header
 
 
-a_166d_file = '0369-00000B77'
-hex_data = get_hex_data(test_dir + a_166d_file + '.bin')
-
-
-def unpack_map():
-    transform_hex = hex_data[192 * 2:216912 * 2]
-    coords, rotations, scales = get_transform_data(transform_hex)
-    model_refs_hex = hex_data[216944*2:219076*2]
+def unpack_map(pkg_folder_name):
+    main_hex, scale_hex = get_hex_from_pkg(pkg_folder_name)
+    transform_hex = main_hex[192 * 2:216912 * 2]
+    rotations, scales = get_transform_data(transform_hex, scale_hex)
+    model_refs_hex = main_hex[216944*2:219076*2]
     model_refs = get_model_refs(model_refs_hex)
-    copy_count_hex = hex_data[219104*2:]
+    copy_count_hex = main_hex[219104*2:]
     copy_counts = get_copy_counts(copy_count_hex)
-    transforms_array = get_transforms_array(model_refs, copy_counts, coords, rotations, scales)
+    transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales)
     obj_strings = get_model_obj_strings(transforms_array)
     write_obj_strings(obj_strings)
 
 
-def get_transform_data(transform_hex):
-    entries_hex = [transform_hex[i:i + 48 * 2] for i in range(0, len(transform_hex), 48 * 2)]
+def get_hex_from_pkg(folder):
+    a_166d_file = '0369-00000B77'
+    main_hex = get_hex_data(test_dir + a_166d_file + '.bin')
+    scale_hex = get_hex_data(test_dir + '0369-000003A7.bin')[48 * 2:]
+    return main_hex, scale_hex
 
-    coords = []
+
+def get_transform_data(transform_hex, scale_hex):
+    rotation_entries_hex = [transform_hex[i:i + 48 * 2] for i in range(0, len(transform_hex), 48 * 2)]
+
     rotations = []
-    for e in entries_hex:
-        hexes = [e[:16 * 2], e[16 * 2:28 * 2]]
-        for k, h in enumerate(hexes):
-            hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
-            floats = []
-            for hex_float in hex_floats:
-                float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
-                floats.append(round(float_value, 3))
-                # floats.append(float_value)
-            if k == 0:
-                rotations.append(floats)
-            else:
-                coords.append(floats)
+    for e in rotation_entries_hex:
+        h = e[:16 * 2]
+        hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
+        floats = []
+        for hex_float in hex_floats:
+            float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
+            floats.append(round(float_value, 3))
+        rotations.append(floats)
 
     # Scale
-    hex_data_3a7 = get_hex_data(test_dir + '0369-000003A7.bin')[48 * 2:]
-    entries_hex = [hex_data_3a7[i:i + 48 * 2] for i in range(0, len(hex_data_3a7), 48 * 2)]
+    scale_entries_hex = [scale_hex[i:i + 48 * 2] for i in range(0, len(scale_hex), 48 * 2)]
 
-    coords1 = []
-    coords2 = []
-    for e in entries_hex:
+    min_scale_coords = []
+    max_scale_coords = []
+    for e in scale_entries_hex:
         hexes = [e[:12 * 2], e[16 * 2:28 * 2]]
         for k, h in enumerate(hexes):
             hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
             floats = []
             for hex_float in hex_floats:
-                # We don't need to worry about flipping hex as this unpack is:
-                # 1. Little Endian 2. DCBA (so reverses the direction)
                 float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
                 floats.append(float_value)
             # Formatting for x,y,z
@@ -102,31 +97,28 @@ def get_transform_data(transform_hex):
                 coord = [floats[i:i + 3] for i in range(0, len(floats), 3)][0]
             else:
                 coord = floats[0]
-            # print(coord)
             if k == 0:
-                coords1.append(coord)
+                min_scale_coords.append(coord)
             elif k == 1:
-                coords2.append(coord)
+                max_scale_coords.append(coord)
 
-    # Getting modifier number from b77
-    hex_data_b77 = hex_data[192*2:216912*2]
-    entries_hex = [hex_data_b77[i:i + 48 * 2] for i in range(0, len(hex_data_b77), 48 * 2)]
-    modifiers = []
-    for e in entries_hex:
-        hex = e[28 * 2:32 * 2]
-        hex_floats = [hex[i:i + 8] for i in range(0, len(hex), 8)]
-        floats = []
-        for hex_float in hex_floats:
-            float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
-            floats.append(float_value)
-        modifier = floats
-        modifiers.append(modifier)
-    ###
-    sub = np.array(coords2) - np.array(coords1)
+    # # Getting modifier number from b77
+    # hex_data_b77 = hex_data[192*2:216912*2]
+    # entries_hex = [hex_data_b77[i:i + 48 * 2] for i in range(0, len(hex_data_b77), 48 * 2)]
+    # modifiers = []
+    # for e in entries_hex:
+    #     hex = e[28 * 2:32 * 2]
+    #     hex_floats = [hex[i:i + 8] for i in range(0, len(hex), 8)]
+    #     floats = []
+    #     for hex_float in hex_floats:
+    #         float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
+    #         floats.append(float_value)
+    #     modifier = floats
+    #     modifiers.append(modifier)
+
     # TODO figure out what to do with modifier stuff
-    scale_factors = [[round(x, 4) for x in sub[i] / np.array(modifiers[i])] for i in range(len(sub))]
-    scale_coords = [[coords1[i], coords2[i]] for i in range(len(coords1))]
-    return coords, rotations, scale_coords
+    scale_coords = [[min_scale_coords[i], max_scale_coords[i]] for i in range(len(min_scale_coords))]
+    return rotations, scale_coords
 
 
 def get_model_refs(model_refs_hex):
@@ -142,22 +134,17 @@ def get_copy_counts(copy_count_hex):
     return [e.Field0 for e in entries]
 
 
-def get_transforms_array(model_refs, copy_counts, coords, rotations, scales):
-    # print(coords[-1])
+def get_transforms_array(model_refs, copy_counts, rotations, scales):
     transforms_array = []
     last_index = 0
     for i, model in enumerate(model_refs):
         copies = copy_counts[i]
         transforms = []
-        # print(last_index, len(coords))
-        # print(copies)
         for copy_id in range(copies):
-            # print(model, copy_id, coords[last_index + copy_id], rotations[last_index + copy_id], rotate_verts([coords[last_index + copy_id]], rotations[last_index + copy_id]))
-            transforms.append([coords[last_index + copy_id], rotations[last_index + copy_id], scales[last_index + copy_id]])
+            transforms.append([rotations[last_index + copy_id], scales[last_index + copy_id]])
         last_index += copies
         transform_array = [model, transforms]
         transforms_array.append(transform_array)
-    # print(last_index, len(coords))
     return transforms_array
 
 
@@ -169,19 +156,16 @@ def get_model_obj_strings(transforms_array):
         #     return obj_strings
         # elif i < 350:
         #     continue
-        print(f'Getting obj {i+1}/{len(transforms_array)} {transform_array[0]}')
         verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
         if not verts_data or not faces_data:
             print('Skipping current model')
             continue
         max_hash_index = len(verts_data)
+        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]} {max_hash_index-1}')
         for copy_id, transform in enumerate(transform_array[1]):
             for hsh_index in range(max_hash_index):
-                # print(f'{transform_array[0]}_{copy_id}')
-                sr_verts_data = rotate_verts(verts_data[hsh_index], transform[1], b_local=True)
-                # Just testing
-                # rsm_verts_data = move_verts(sr_verts_data, rotate_verts(transform[0], transform[1], b_local=False))
-                test_loc_verts = set_vert_locations(sr_verts_data, transform[2])
+                sr_verts_data = rotate_verts(verts_data[hsh_index], transform[0], b_local=True)
+                test_loc_verts = set_vert_locations(sr_verts_data, transform[1])
                 adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
                 obj_str = model_unpacker.get_obj_str(adjusted_faces_data, test_loc_verts)
                 obj_str = f'o {transform_array[0]}_{copy_id}_{hsh_index}\n' + obj_str
@@ -230,7 +214,7 @@ def adjust_faces_data(faces_data, max_vert_used):
 
 def rotate_verts(verts_data, rotation_transform, b_local):
     if b_local:
-        # if rotation_transform[0] == -0.0:
+        # if rotation_transform[3] < 0 or rotation_transform[3] == -0.0:
         #     rotation_transform = [-x for x in rotation_transform]
         # w = rotation_transform[0]
         # x = rotation_transform[1]
@@ -242,8 +226,12 @@ def rotate_verts(verts_data, rotation_transform, b_local):
         z = rotation_transform[2]
         w = rotation_transform[3]
 
+        # if w < 0 or w == -0.0:
+        #     w = -w
+
         r = scipy.spatial.transform.Rotation.from_quat([x, y, z, w])
-        quat_rots = scipy.spatial.transform.Rotation.apply(r, [[-x[0], x[1], x[2]] for x in verts_data], inverse=False)
+        # print(f'Actually rot with {[x, y, z, w]}')
+        quat_rots = scipy.spatial.transform.Rotation.apply(r, [[x[0], x[1], x[2]] for x in verts_data], inverse=False)
     else:
         quat_rots = [-verts_data[0], verts_data[2], verts_data[1]]
     return quat_rots
@@ -270,4 +258,4 @@ def write_obj_strings(obj_strings):
 
 
 if __name__ == '__main__':
-    unpack_map()
+    unpack_map('')
