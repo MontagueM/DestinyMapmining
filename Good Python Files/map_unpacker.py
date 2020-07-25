@@ -3,6 +3,7 @@ import numpy as np
 import struct
 import model_unpacker
 import scipy.spatial
+import copy
 
 
 @dataclass
@@ -170,24 +171,46 @@ def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
     for i, transform_array in enumerate(transforms_array):
-        # if i > 100:
-        #     return obj_strings
-        # elif i < 350:
+        if i > 1:
+            return obj_strings
+        # elif i < 200:
         #     continue
-        verts_data, faces_data = model_unpacker.get_verts_faces_data(transform_array[0])
-        if not verts_data or not faces_data:
+        model_file = model_unpacker.get_file_from_hash(get_flipped_hex(transform_array[0], 8))
+        model_data_file = model_unpacker.get_model_data_file(model_file)
+        submeshes_verts, submeshes_faces = model_unpacker.get_verts_faces_data(model_data_file)
+        if not submeshes_verts or not submeshes_faces:
             print('Skipping current model')
             continue
-        max_hash_index = len(verts_data)
-        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]} {max_hash_index-1}')
+        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]}')
+        # for copy_id, transform in enumerate(transform_array[1]):
+        #     for index_2 in submeshes_verts.keys():
+        #         for index_3 in range(len(submeshes_verts[index_2])):
+        #             # It is possible (and seems to be the case) that scale is dependent on index_2 only, meaning that we need to scale the sum of all the third indexes for that second index together.
+        #             # The likely reason for incorrect scaling was actually because of the LODs.
+        #             r_verts_data = rotate_verts(submeshes_verts[index_2][index_3], transform[0])
+        #             loc_verts = set_vert_locations(r_verts_data, transform[1])
+        #             adjusted_faces_data, max_vert_used = model_unpacker.adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
+        #             obj_str = model_unpacker.get_obj_str(adjusted_faces_data, loc_verts)
+        #             obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str
+        #             obj_strings.append(obj_str)
+
+        ##
         for copy_id, transform in enumerate(transform_array[1]):
-            for hsh_index in range(max_hash_index):
-                sr_verts_data = rotate_verts(verts_data[hsh_index], transform[0])
-                test_loc_verts = set_vert_locations(sr_verts_data, transform[1])
-                adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
-                obj_str = model_unpacker.get_obj_str(adjusted_faces_data, test_loc_verts)
-                obj_str = f'o {transform_array[0]}_{copy_id}_{hsh_index}\n' + obj_str
-                obj_strings.append(obj_str)
+            for index_2 in submeshes_verts.keys():
+                index_2_verts = []
+                [[index_2_verts.append(y) for y in x] for x in submeshes_verts[index_2]]
+                r_verts_data = rotate_verts(index_2_verts, transform[0])
+                loc_verts = set_vert_locations(r_verts_data, transform[1])
+
+                offset = 0
+                for index_3 in range(len(submeshes_verts[index_2])):
+                    new_verts = loc_verts[offset:offset + len(submeshes_verts[index_2][index_3])]
+                    offset += len(new_verts)
+                    adjusted_faces_data, max_vert_used = model_unpacker.adjust_faces_data(submeshes_faces[index_2][index_3],
+                                                                                          max_vert_used)
+                    obj_str = model_unpacker.get_obj_str(adjusted_faces_data, new_verts)
+                    obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str
+                    obj_strings.append(obj_str)
     return obj_strings
 
 
@@ -212,22 +235,10 @@ def set_vert_locations(verts, scale_info):
     return [[-output[0][i], output[2][i], output[1][i]] for i in range(len(x))]
 
 
-def adjust_faces_data(faces_data, max_vert_used):
-    new_faces_data = []
-    all_v = []
-    for face in faces_data:
-        new_face = []
-        for v in face:
-            new_face.append(v + max_vert_used)
-            all_v.append(v + max_vert_used)
-        new_faces_data.append(new_face)
-    return new_faces_data, max(all_v)
-
-
 def rotate_verts(verts_data, rotation_transform):
     r = scipy.spatial.transform.Rotation.from_quat(rotation_transform)
     quat_rots = scipy.spatial.transform.Rotation.apply(r, [[x[0], x[1], x[2]] for x in verts_data], inverse=False)
-    return quat_rots
+    return quat_rots.tolist()
 
 
 def move_verts(verts_data, move_transform):
@@ -245,11 +256,11 @@ def scale_verts(verts_data, scale_transform):
 
 def write_obj_strings(obj_strings):
     #city_tower_d2_0369
-    with open('unpacked_objects/test.obj', 'w') as f:
+    with open('unpacked_objects/city_tower_d2_0369_new.obj', 'w') as f:
         for string in obj_strings:
             f.write(string)
     print('Written to file.')
 
 
 if __name__ == '__main__':
-    unpack_map('036A-0000153E')
+    unpack_map('0369-00000B77')

@@ -179,13 +179,13 @@ def get_verts_faces_data(model_data_file):
         all_verts_20_data.append(verts_20_data)
     submeshes_faces, submeshes_entries = separate_submeshes_remove_lods(model_data_hex, all_faces_data)
     submeshes_verts = {x: [] for x in submeshes_faces.keys()}
-    for i in range(len(submeshes_faces.keys())):
+    for i in submeshes_faces.keys():
         for j, faces in enumerate(submeshes_faces[i]):
             if submeshes_entries[i][j].EntryType == 769:
                 submeshes_verts[i].append(trim_verts_data(all_verts_8_data[i], faces))
             elif submeshes_entries[i][j].EntryType == 770:
-                print('k')
-                submeshes_verts[i].append(trim_verts_data(all_verts_20_data[i], faces))
+                # TODO currently only thing that doesn't work. Literally everything else does.
+                submeshes_verts[i].append(trim_verts_data(all_verts_8_data[i], faces))
 
     return submeshes_verts, submeshes_faces
 
@@ -205,12 +205,12 @@ def get_faces_verts_files(model_data_file):
     verts_20_files = []
     pkg_name = get_pkg_name(model_data_file)
     if not pkg_name:
-        return None, None
+        return None, None, None, None
     try:
         model_data_hex = get_hex_data(f'{test_dir}/{pkg_name}/{model_data_file}.bin')
     except FileNotFoundError:
         print(f'No folder found for file {model_data_file}. Likely need to unpack it or design versioning system.')
-        return None, None
+        return None, None, None, None
     split_hex = model_data_hex.split('BD9F8080')[-1]
     model_count = int(get_flipped_hex(split_hex[:4], 4), 16)
     relevant_hex = split_hex[32:]
@@ -219,7 +219,7 @@ def get_faces_verts_files(model_data_file):
         verts_8_hash = get_flipped_hex(relevant_hex[32*i+8:32*i+16], 8)
         verts_20_hash = get_flipped_hex(relevant_hex[32*i+16:32*i+24], 8)
         if faces_hash == '' or verts_8_hash == '' or verts_20_hash == '':
-            return None, None
+            return None, None, None, None
         faces_file, verts_8_file, verts_20_file = get_file_from_hash(faces_hash), get_file_from_hash(verts_8_hash), get_file_from_hash(verts_20_hash)
         faces_files.append(faces_file)
         verts_8_files.append(verts_8_file)
@@ -304,7 +304,6 @@ def get_verts_data(verts_file, b_20):
     coords = []
     for hex_data in hex_data_split:
         if b_20:
-            print(verts_file)
             hex_data = hex_data[:12]
         coord = []
         for j in range(3):
