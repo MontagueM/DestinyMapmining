@@ -111,7 +111,6 @@ def get_transform_data(transform_hex, scale_hex):
             for hex_float in hex_floats:
                 float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
                 floats.append(float_value)
-            # Formatting for x,y,z
             if len(floats) == 3:
                 coord = [floats[i:i + 3] for i in range(0, len(floats), 3)][0]
             else:
@@ -121,21 +120,6 @@ def get_transform_data(transform_hex, scale_hex):
             elif k == 1:
                 max_scale_coords.append(coord)
 
-    # # Getting modifier number from b77
-    # hex_data_b77 = hex_data[192*2:216912*2]
-    # entries_hex = [hex_data_b77[i:i + 48 * 2] for i in range(0, len(hex_data_b77), 48 * 2)]
-    # modifiers = []
-    # for e in entries_hex:
-    #     hex = e[28 * 2:32 * 2]
-    #     hex_floats = [hex[i:i + 8] for i in range(0, len(hex), 8)]
-    #     floats = []
-    #     for hex_float in hex_floats:
-    #         float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
-    #         floats.append(float_value)
-    #     modifier = floats
-    #     modifiers.append(modifier)
-
-    # TODO figure out what to do with modifier stuff
     scale_coords = [[min_scale_coords[i], max_scale_coords[i]] for i in range(len(min_scale_coords))]
     return rotations, scale_coords
 
@@ -170,37 +154,34 @@ def get_transforms_array(model_refs, copy_counts, rotations, scales):
 def get_model_obj_strings(transforms_array):
     obj_strings = []
     max_vert_used = 0
+    nums = 0
+    manual_scale_modifications = {
+        # '2E24ED80': [0.536, 0.457, 0.391],
+    }
     for i, transform_array in enumerate(transforms_array):
-        if i > 1:
+        if i > 440:
             return obj_strings
-        # elif i < 200:
-        #     continue
+        elif i < 435:
+            continue
         model_file = model_unpacker.get_file_from_hash(get_flipped_hex(transform_array[0], 8))
         model_data_file = model_unpacker.get_model_data_file(model_file)
         submeshes_verts, submeshes_faces = model_unpacker.get_verts_faces_data(model_data_file)
         if not submeshes_verts or not submeshes_faces:
             print('Skipping current model')
             continue
-        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]}')
-        # for copy_id, transform in enumerate(transform_array[1]):
-        #     for index_2 in submeshes_verts.keys():
-        #         for index_3 in range(len(submeshes_verts[index_2])):
-        #             # It is possible (and seems to be the case) that scale is dependent on index_2 only, meaning that we need to scale the sum of all the third indexes for that second index together.
-        #             # The likely reason for incorrect scaling was actually because of the LODs.
-        #             r_verts_data = rotate_verts(submeshes_verts[index_2][index_3], transform[0])
-        #             loc_verts = set_vert_locations(r_verts_data, transform[1])
-        #             adjusted_faces_data, max_vert_used = model_unpacker.adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
-        #             obj_str = model_unpacker.get_obj_str(adjusted_faces_data, loc_verts)
-        #             obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str
-        #             obj_strings.append(obj_str)
+        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]} {nums}')
+        if transform_array[0] in manual_scale_modifications.keys():
+            manual_scale_mod = manual_scale_modifications[transform_array[0]]
+        else:
+            manual_scale_mod = [1, 1, 1]
 
-        ##
         for copy_id, transform in enumerate(transform_array[1]):
+            nums += 1
             for index_2 in submeshes_verts.keys():
                 index_2_verts = []
                 [[index_2_verts.append(y) for y in x] for x in submeshes_verts[index_2]]
                 r_verts_data = rotate_verts(index_2_verts, transform[0])
-                loc_verts = set_vert_locations(r_verts_data, transform[1])
+                loc_verts = set_vert_locations(r_verts_data, transform[1], manual_scale_mod)
 
                 offset = 0
                 for index_3 in range(len(submeshes_verts[index_2])):
@@ -214,7 +195,7 @@ def get_model_obj_strings(transforms_array):
     return obj_strings
 
 
-def set_vert_locations(verts, scale_info):
+def set_vert_locations(verts, scale_info, manual_scale_mod):
     coords1 = scale_info[0]
     coords2 = scale_info[1]
     x = [x[0] for x in verts]
@@ -229,8 +210,11 @@ def set_vert_locations(verts, scale_info):
         c_max = coords2[i]
         t_range = t_max - t_min
         for point in t:
-            c_range = c_max - c_min
-            interp = ((point - t_min) / t_range) * c_range + c_min
+            if t_range == 0:
+                interp = c_min
+            else:
+                c_range = c_max - c_min
+                interp = (((point - t_min) / t_range) * c_range + c_min) * manual_scale_mod[i]
             output[i].append(interp)
     return [[-output[0][i], output[2][i], output[1][i]] for i in range(len(x))]
 
@@ -241,21 +225,7 @@ def rotate_verts(verts_data, rotation_transform):
     return quat_rots.tolist()
 
 
-def move_verts(verts_data, move_transform):
-    moved_verts = []
-    for coord in verts_data:
-        moved_vert = np.array(coord) + np.array(move_transform)
-        moved_verts.append([round(x, 6) for x in moved_vert.tolist()])
-    return moved_verts
-
-
-def scale_verts(verts_data, scale_transform):
-    print(verts_data, scale_transform)
-    return np.multiply([scale_transform[0], scale_transform[2], scale_transform[1]], verts_data)
-
-
 def write_obj_strings(obj_strings):
-    #city_tower_d2_0369
     with open('unpacked_objects/city_tower_d2_0369_new.obj', 'w') as f:
         for string in obj_strings:
             f.write(string)
