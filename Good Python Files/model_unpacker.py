@@ -130,7 +130,7 @@ def get_model(model_file_hash):
     max_vert_used = 0
     for index_2 in range(len(submeshes_verts.keys())):
         for index_3 in range(len(submeshes_verts[index_2])):
-            adjusted_faces_data, max_vert_used = map_unpacker.adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
+            adjusted_faces_data, max_vert_used = adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
             obj_str = get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3])
             obj_str = f'o {model_file_hash}_0_{index_2}_{index_3}\n' + obj_str
             obj_strings.append(obj_str)
@@ -138,28 +138,54 @@ def get_model(model_file_hash):
     write_obj(obj_strings, model_file_hash)
 
 
+def adjust_faces_data(faces_data, max_vert_used):
+    new_faces_data = []
+    all_v = []
+    for face in faces_data:
+        for v in face:
+            all_v.append(v)
+    starting_face_number = min(all_v) -1
+    all_v = []
+    for face in faces_data:
+        new_face = []
+        for v in face:
+            new_face.append(v - starting_face_number + max_vert_used)
+            all_v.append(v - starting_face_number + max_vert_used)
+        new_faces_data.append(new_face)
+    return new_faces_data, max(all_v)
+
+
 def get_verts_faces_data(model_data_file):
     all_faces_data = []
-    all_verts_data = []
+    all_verts_8_data = []
+    all_verts_20_data = []
     pkg_db.start_db_connection('2_9_0_1')
-    faces_files, verts_files, model_data_hex = get_faces_verts_files(model_data_file)
-    if not faces_files or not verts_files:
+    faces_files, verts_8_files, verts_20_files, model_data_hex = get_faces_verts_files(model_data_file)
+    if not faces_files or not verts_8_files or not verts_20_files:
         return None, None
     for i, faces_file in enumerate(faces_files):
-        verts_file = verts_files[i]
+        verts_8_file = verts_8_files[i]
+        verts_20_file = verts_20_files[i]
         faces_data = get_faces_data(faces_file)
-        verts_data = get_verts_data(verts_file)
-        if not verts_data or verts_data == []:
+        verts_8_data = get_verts_data(verts_8_file, b_20=False)
+        # Even though this may be None it should be okay.
+        verts_20_data = get_verts_data(verts_20_file, b_20=True)
+        if not verts_8_data or verts_8_data == []:
             return None, None
         if not faces_data or faces_data == []:
             return None, None
         all_faces_data.append(faces_data)
-        all_verts_data.append(verts_data)
-    submeshes_faces = separate_submeshes_remove_lods(model_data_hex, all_faces_data)
+        all_verts_8_data.append(verts_8_data)
+        all_verts_20_data.append(verts_20_data)
+    submeshes_faces, submeshes_entries = separate_submeshes_remove_lods(model_data_hex, all_faces_data)
     submeshes_verts = {x: [] for x in submeshes_faces.keys()}
     for i in range(len(submeshes_faces.keys())):
-        for faces in submeshes_faces[i]:
-            submeshes_verts[i].append(trim_verts_data(all_verts_data[i], faces))
+        for j, faces in enumerate(submeshes_faces[i]):
+            if submeshes_entries[i][j].EntryType == 769:
+                submeshes_verts[i].append(trim_verts_data(all_verts_8_data[i], faces))
+            elif submeshes_entries[i][j].EntryType == 770:
+                print('k')
+                submeshes_verts[i].append(trim_verts_data(all_verts_20_data[i], faces))
 
     return submeshes_verts, submeshes_faces
 
@@ -175,7 +201,8 @@ def get_model_data_file(model_file):
 
 def get_faces_verts_files(model_data_file):
     faces_files = []
-    verts_files = []
+    verts_8_files = []
+    verts_20_files = []
     pkg_name = get_pkg_name(model_data_file)
     if not pkg_name:
         return None, None
@@ -189,14 +216,16 @@ def get_faces_verts_files(model_data_file):
     relevant_hex = split_hex[32:]
     for i in range(model_count):
         faces_hash = get_flipped_hex(relevant_hex[32*i:32*i+8], 8)
-        verts_hash = get_flipped_hex(relevant_hex[32*i+8:32*i+16], 8)
-        if faces_hash == '' or verts_hash == '':
+        verts_8_hash = get_flipped_hex(relevant_hex[32*i+8:32*i+16], 8)
+        verts_20_hash = get_flipped_hex(relevant_hex[32*i+16:32*i+24], 8)
+        if faces_hash == '' or verts_8_hash == '' or verts_20_hash == '':
             return None, None
-        faces_file, verts_file = get_file_from_hash(faces_hash), get_file_from_hash(verts_hash)
+        faces_file, verts_8_file, verts_20_file = get_file_from_hash(faces_hash), get_file_from_hash(verts_8_hash), get_file_from_hash(verts_20_hash)
         faces_files.append(faces_file)
-        verts_files.append(verts_file)
+        verts_8_files.append(verts_8_file)
+        verts_20_files.append(verts_20_file)
 
-    return faces_files, verts_files, model_data_hex
+    return faces_files, verts_8_files, verts_20_files, model_data_hex
 
 
 def separate_submeshes_remove_lods(model_data_hex, all_faces_data):
@@ -217,10 +246,15 @@ def separate_submeshes_remove_lods(model_data_hex, all_faces_data):
     useful_entries = [useful_entries_hex[i:i+24] for i in range(0, len(useful_entries_hex), 24)]
 
     submesh_entries = []
+    ret_sub_entries = {}
     for e in useful_entries:
         entry = get_header(e, LODSubmeshEntry())
-        if entry.EntryType == 769:
+        # The most likely thing for 770 is that it uses the 20 verts file.
+        if entry.EntryType == 769 or entry.EntryType == 770:
             submesh_entries.append(entry)
+            if entry.SecondIndexRef not in ret_sub_entries.keys():
+                ret_sub_entries[entry.SecondIndexRef] = []
+            ret_sub_entries[entry.SecondIndexRef].append(entry)
 
     submeshes = {}
     for i, e in enumerate(submesh_entries):
@@ -229,7 +263,7 @@ def separate_submeshes_remove_lods(model_data_hex, all_faces_data):
         submeshes[e.SecondIndexRef].append(all_faces_data[e.SecondIndexRef][int(e.Offset/3):int((e.Offset + e.FacesLength)/3)])
         print()
 
-    return submeshes
+    return submeshes, ret_sub_entries
 
 
 def get_faces_data(faces_file):
@@ -249,7 +283,8 @@ def get_faces_data(faces_file):
         return None
 
 
-def get_verts_data(verts_file):
+def get_verts_data(verts_file, b_20):
+    # TODO deal with this
     pkg_name = get_pkg_name(verts_file)
     if not pkg_name:
         return None
@@ -268,6 +303,9 @@ def get_verts_data(verts_file):
 
     coords = []
     for hex_data in hex_data_split:
+        if b_20:
+            print(verts_file)
+            hex_data = hex_data[:12]
         coord = []
         for j in range(3):
             selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
@@ -297,8 +335,6 @@ def trim_verts_data(verts_data, faces_data):
     for face in faces_data:
         for v in face:
             all_v.append(v)
-    a = min(all_v)
-    b = max(all_v) + 1
     return verts_data[min(all_v)-1:max(all_v)]
 
 
@@ -328,4 +364,4 @@ if __name__ == '__main__':
     - mess around until you find the answer
     """
     #7C23ED80
-    get_model('0022ED80')
+    get_model('7C23ED80')
