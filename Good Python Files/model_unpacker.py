@@ -13,6 +13,14 @@ class Stride12Header:
     DeadBeef: np.uint32 = np.uint32(0)
 
 
+@dataclass
+class LODSubmeshEntry:
+    Offset: np.uint32 = np.uint32(0)
+    FacesLength: np.uint32 = np.uint32(0)
+    SecondIndexRef: np.uint16 = np.uint16(0)
+    EntryType: np.uint16 = np.uint16(0)
+
+
 def fill_hex_with_zeros(s, desired_length):
     return ("0"*desired_length + s)[-desired_length:]
 
@@ -58,6 +66,11 @@ def get_header(file_hex, header):
             value = np.uint32(int(flipped, 16))
             setattr(header, f.name, value)
             file_hex = file_hex[8:]
+        elif f.type == np.uint16:
+            flipped = "".join(get_flipped_hex(file_hex, 4))
+            value = np.uint16(int(flipped, 16))
+            setattr(header, f.name, value)
+            file_hex = file_hex[4:]
     return header
 
 
@@ -111,30 +124,25 @@ def get_model(model_file_hash):
     pkg_db.start_db_connection('2_9_0_1')
     model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
-    # print(model_data_file)
-    faces_file, verts_file = get_faces_verts_files(model_data_file)
-    # print(faces_file, verts_file)
-    faces_data = get_faces_data(faces_file)
-    print(f'Num faces: {len(faces_data)}')
-    # print(faces_data)
-    verts_data = get_verts_data(verts_file)
-    print(f'Num verts: {len(verts_data)}')
-    # print(verts_data)
-    faces_data = trim_faces_data(faces_data, len(verts_data))
-    print(f'Num trimmed faces: {len(faces_data)}')
-    # TODO add trimming for verts as below
-    # print(faces_data)
+    verts_data, faces_data = get_verts_faces_data(model_data_file)
+    max_hash_index = len(verts_data)
+    for index_2 in range(max_hash_index):
+        for index_3 in range():
+            adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
+            obj_str = model_unpacker.get_obj_str(adjusted_faces_data, test_loc_verts)
+            obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str
+            obj_strings.append(obj_str)
+
+
     obj_str = get_obj_str(faces_data, verts_data)
     write_obj(obj_str, model_file_hash.upper())
 
 
-def get_verts_faces_data(model_file_hash):
+def get_verts_faces_data(model_data_file):
     all_faces_data = []
     all_verts_data = []
     pkg_db.start_db_connection('2_9_0_1')
-    model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
-    model_data_file = get_model_data_file(model_file)
-    faces_files, verts_files = get_faces_verts_files(model_data_file)
+    faces_files, verts_files, model_data_hex = get_faces_verts_files(model_data_file)
     if not faces_files or not verts_files:
         return None, None
     for i, faces_file in enumerate(faces_files):
@@ -145,13 +153,15 @@ def get_verts_faces_data(model_file_hash):
             return None, None
         if not faces_data or faces_data == []:
             return None, None
-        faces_data = trim_faces_data(faces_data, len(verts_data))
-        if not faces_data or faces_data == []:
-            return None, None
-        verts_data = trim_verts_data(verts_data, faces_data)
         all_faces_data.append(faces_data)
         all_verts_data.append(verts_data)
-    return all_verts_data, all_faces_data
+    submeshes_faces = separate_submeshes_remove_lods(model_data_hex, all_faces_data)
+    submeshes_verts = {x: [] for x in submeshes_faces.keys()}
+    for i in range(max(submeshes_faces.keys())+1):
+        for faces in submeshes_faces[i]:
+            submeshes_verts[i].append(trim_verts_data(all_verts_data[i], faces))
+
+    return submeshes_verts, submeshes_faces
 
 
 def get_model_data_file(model_file):
@@ -185,7 +195,40 @@ def get_faces_verts_files(model_data_file):
         faces_file, verts_file = get_file_from_hash(faces_hash), get_file_from_hash(verts_hash)
         faces_files.append(faces_file)
         verts_files.append(verts_file)
-    return faces_files, verts_files
+
+    return faces_files, verts_files, model_data_hex
+
+
+def separate_submeshes_remove_lods(model_data_hex, all_faces_data):
+    """
+    If entry is a submesh, I believe the range is just from Offset to Offset + FacesLength, where FacesLength/3 is the number of final faces
+    If entry is LOD, range is the same where FacesLength/3 is the number of removed faces.
+    Hence, we can pull all the stuff we want out by just separating [Offset:Offset + FacesLength]
+    """
+    unk_entries_count = int(get_flipped_hex(model_data_hex[80*2:80*2 + 8], 4), 16)
+    unk_entries_offset = 96
+
+    end_offset = unk_entries_offset + unk_entries_count * 8
+    end_place = int(model_data_hex[end_offset*2:].find('BD9F8080')/2)
+    useful_entries_count = int(get_flipped_hex(model_data_hex[(end_offset + end_place + 4)*2:(end_offset + end_place + 6)*2], 4), 16)
+    useful_entries_offset = end_offset + end_place + 20
+    useful_entries_length = useful_entries_count * 12
+    useful_entries_hex = model_data_hex[useful_entries_offset*2:useful_entries_offset*2 + useful_entries_length*2]
+    useful_entries = [useful_entries_hex[i:i+24] for i in range(0, len(useful_entries_hex), 24)]
+
+    submesh_entries = []
+    for e in useful_entries:
+        entry = get_header(e, LODSubmeshEntry())
+        if entry.EntryType == 769:
+            submesh_entries.append(entry)
+
+    submeshes = {}
+    for i, e in enumerate(submesh_entries):
+        if e.SecondIndexRef not in submeshes.keys():
+            submeshes[e.SecondIndexRef] = []
+        submeshes[e.SecondIndexRef].append(all_faces_data[e.SecondIndexRef][e.Offset*2*3:(e.Offset*2 + e.FacesLength*2)*3])
+
+    return submeshes
 
 
 def get_faces_data(faces_file):
@@ -248,35 +291,12 @@ def get_verts_data(verts_file):
     return coords
 
 
-# A terrible method that should be replaced by a deterministic system
-def trim_faces_data(faces_data, num_verts):
-    reset = True
-    hit_max = False
-    start = 0
-    for i, face in enumerate(faces_data):
-        if face[0] == 1 and reset:
-            start = int(i)
-            # print('start', start)
-            reset = False
-            hit_max = False
-        for v in face:
-            # If we're travelling along a set of faces that isn't for this obj
-            if v > num_verts:
-                reset = True
-        if num_verts in face:
-            hit_max = True
-        if hit_max and 1 in face or i == len(faces_data)-1:
-            return faces_data[start:i]
-        else:
-            reset = True
-
-
 def trim_verts_data(verts_data, faces_data):
     all_v = []
     for face in faces_data:
         for v in face:
             all_v.append(v)
-    return verts_data[:max(all_v)]
+    return verts_data[min(all_v):max(all_v)]
 
 
 def get_obj_str(faces_data, verts_data):
@@ -297,19 +317,12 @@ def write_obj(obj_str, file_hash):
 
 
 if __name__ == '__main__':
-    # get_model('0022ED80')
-    # get_model('242AED80')
-    # get_model('A117C780')
-    # get_model('16CDC580')
-    # get_model('5C20ED80')
-    # get_model('4224ED80')
-
-    # get_model('C7D1F380')
-    # get_model('F321ED80')
-    # get_model('3CF55681')
-    # get_model('C722ED80')
-    # get_model('1424ED80')
-    # get_model('8B21ED80')
-    # get_model('F322ED80')
-
-    get_model('CCC7F380')
+    """
+    To redesign:
+    - add the second index stuff
+    - remove the weird iteration system for now for finding verts
+    - read entries from the data file
+    - mess around until you find the answer
+    """
+    #7C23ED80
+    get_model('0022ED80')
