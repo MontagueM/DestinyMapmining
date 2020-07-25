@@ -4,6 +4,7 @@ from dataclasses import dataclass, fields
 import numpy as np
 import binascii
 import os
+import map_unpacker
 
 
 @dataclass
@@ -124,18 +125,17 @@ def get_model(model_file_hash):
     pkg_db.start_db_connection('2_9_0_1')
     model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
-    verts_data, faces_data = get_verts_faces_data(model_data_file)
-    max_hash_index = len(verts_data)
-    for index_2 in range(max_hash_index):
-        for index_3 in range():
-            adjusted_faces_data, max_vert_used = adjust_faces_data(faces_data[hsh_index], max_vert_used)
-            obj_str = model_unpacker.get_obj_str(adjusted_faces_data, test_loc_verts)
-            obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str
+    submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file)
+    obj_strings = []
+    max_vert_used = 0
+    for index_2 in range(len(submeshes_verts.keys())):
+        for index_3 in range(len(submeshes_verts[index_2])):
+            adjusted_faces_data, max_vert_used = map_unpacker.adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
+            obj_str = get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3])
+            obj_str = f'o {model_file_hash}_0_{index_2}_{index_3}\n' + obj_str
             obj_strings.append(obj_str)
 
-
-    obj_str = get_obj_str(faces_data, verts_data)
-    write_obj(obj_str, model_file_hash.upper())
+    write_obj(obj_strings, model_file_hash)
 
 
 def get_verts_faces_data(model_data_file):
@@ -157,7 +157,7 @@ def get_verts_faces_data(model_data_file):
         all_verts_data.append(verts_data)
     submeshes_faces = separate_submeshes_remove_lods(model_data_hex, all_faces_data)
     submeshes_verts = {x: [] for x in submeshes_faces.keys()}
-    for i in range(max(submeshes_faces.keys())+1):
+    for i in range(len(submeshes_faces.keys())):
         for faces in submeshes_faces[i]:
             submeshes_verts[i].append(trim_verts_data(all_verts_data[i], faces))
 
@@ -226,7 +226,8 @@ def separate_submeshes_remove_lods(model_data_hex, all_faces_data):
     for i, e in enumerate(submesh_entries):
         if e.SecondIndexRef not in submeshes.keys():
             submeshes[e.SecondIndexRef] = []
-        submeshes[e.SecondIndexRef].append(all_faces_data[e.SecondIndexRef][e.Offset*2*3:(e.Offset*2 + e.FacesLength*2)*3])
+        submeshes[e.SecondIndexRef].append(all_faces_data[e.SecondIndexRef][int(e.Offset/3):int((e.Offset + e.FacesLength)/3)])
+        print()
 
     return submeshes
 
@@ -296,7 +297,9 @@ def trim_verts_data(verts_data, faces_data):
     for face in faces_data:
         for v in face:
             all_v.append(v)
-    return verts_data[min(all_v):max(all_v)]
+    a = min(all_v)
+    b = max(all_v) + 1
+    return verts_data[min(all_v)-1:max(all_v)]
 
 
 def get_obj_str(faces_data, verts_data):
@@ -309,11 +312,11 @@ def get_obj_str(faces_data, verts_data):
     return verts_str + faces_str
 
 
-def write_obj(obj_str, file_hash):
-    with open(f'unpacked_objects/{file_hash}.obj', 'w') as f:
-        f.write(f'o {file_hash}\n')
-        for line in obj_str:
-            f.write(line)
+def write_obj(obj_strings, hsh):
+    with open(f'unpacked_objects/{hsh}.obj', 'w') as f:
+        for string in obj_strings:
+            f.write(string)
+    print('Written to file.')
 
 
 if __name__ == '__main__':
