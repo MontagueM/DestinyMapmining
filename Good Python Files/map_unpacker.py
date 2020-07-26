@@ -3,7 +3,9 @@ import numpy as np
 import struct
 import model_unpacker
 import scipy.spatial
+import pkg_db
 import copy
+import os
 
 
 @dataclass
@@ -43,19 +45,27 @@ def get_header(file_hex, header):
     return header
 
 
-def unpack_map(main_file):
-    scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file)
+def unpack_map(main_file, folder_name='Other', version='2_9_0_1'):
+    # If the file is too large you can uncomment the LARGE stuff
+    scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file, version)
 
     rotations, scales = get_transform_data(transform_hex, scale_hex)
     model_refs = get_model_refs(model_refs_hex)
     copy_counts = get_copy_counts(copy_count_hex)
     transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales)
-    obj_strings = get_model_obj_strings(transforms_array)
-    write_obj_strings(obj_strings)
+    if main_file == '067D-000009E7':
+        LARGE_total_end_files = 10  # LARGE
+        for i in range(LARGE_total_end_files):  # LARGE
+            split_len = int(len(transforms_array)/LARGE_total_end_files)  # LARGE
+            obj_strings = get_model_obj_strings(transforms_array[split_len*i:split_len*(i+1)], version)  # LARGE
+            write_obj_strings(obj_strings, folder_name, main_file + str(i))  # LARGE
+    else:
+        obj_strings = get_model_obj_strings(transforms_array, version)
+        write_obj_strings(obj_strings, folder_name, main_file)
 
 
-def get_hex_from_pkg(file):
-    pkgs_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all'
+def get_hex_from_pkg(file, version):
+    pkgs_dir = f'D:/D2_Datamining/Package Unpacker/{version}/output_all'
 
     main_pkg = model_unpacker.get_pkg_name(file)
     main_hex = get_hex_data(f'{pkgs_dir}/{main_pkg}/{file}.bin')
@@ -151,21 +161,22 @@ def get_transforms_array(model_refs, copy_counts, rotations, scales):
     return transforms_array
 
 
-def get_model_obj_strings(transforms_array):
+def get_model_obj_strings(transforms_array, version):
     obj_strings = []
     max_vert_used = 0
     nums = 0
     manual_scale_modifications = {
         # '2E24ED80': [0.536, 0.457, 0.391],
     }
+
     for i, transform_array in enumerate(transforms_array):
-        if i > 440:
-            return obj_strings
-        elif i < 435:
-            continue
+        # if i > 440:
+        #     return obj_strings
+        # elif i < 435:
+        #     continue
         model_file = model_unpacker.get_file_from_hash(get_flipped_hex(transform_array[0], 8))
         model_data_file = model_unpacker.get_model_data_file(model_file)
-        submeshes_verts, submeshes_faces = model_unpacker.get_verts_faces_data(model_data_file)
+        submeshes_verts, submeshes_faces = model_unpacker.get_verts_faces_data(model_data_file, version)
         if not submeshes_verts or not submeshes_faces:
             print('Skipping current model')
             continue
@@ -225,12 +236,29 @@ def rotate_verts(verts_data, rotation_transform):
     return quat_rots.tolist()
 
 
-def write_obj_strings(obj_strings):
-    with open('unpacked_objects/city_tower_d2_0369_new.obj', 'w') as f:
+def write_obj_strings(obj_strings, folder_name, file_name):
+    try:
+        os.mkdir(f'unpacked_objects/{folder_name}')
+    except FileExistsError:
+        pass
+    with open(f'unpacked_objects/{folder_name}/{file_name}.obj', 'w') as f:
         for string in obj_strings:
             f.write(string)
-    print('Written to file.')
+    print(f'Written to {folder_name}/{file_name}.obj')
+
+
+def unpack_folder(pkg_name, version):
+    pkg_db.start_db_connection(version)
+    entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID') if y == '0x166D'}
+    entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG') if y == '0x0004'}
+    entries_size = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, FileSizeB')}
+    file_names = sorted(entries_refid.keys(), key=lambda x: entries_size[x])
+    for file_name in file_names:
+        if file_name in entries_refpkg.keys():
+            print(f'Unpacking {file_name}')
+            unpack_map(file_name, folder_name=pkg_name, version=version)
 
 
 if __name__ == '__main__':
-    unpack_map('0369-00000B77')
+    # unpack_map('036A-00001783')
+    unpack_folder('sky_island_067d', '2_9_0_1')

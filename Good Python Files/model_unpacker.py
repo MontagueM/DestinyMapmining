@@ -122,10 +122,10 @@ def get_model(model_file_hash):
     - write obj
     """
     print(model_file_hash)
-    pkg_db.start_db_connection('2_9_0_1')
+    pkg_db.start_db_connection(version)
     model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
-    submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file)
+    submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file, version)
     obj_strings = []
     max_vert_used = 0
     for index_2 in range(len(submeshes_verts.keys())):
@@ -155,11 +155,11 @@ def adjust_faces_data(faces_data, max_vert_used):
     return new_faces_data, max(all_v)
 
 
-def get_verts_faces_data(model_data_file):
+def get_verts_faces_data(model_data_file,version):
     all_faces_data = []
     all_verts_8_data = []
     all_verts_20_data = []
-    pkg_db.start_db_connection('2_9_0_1')
+    pkg_db.start_db_connection(version)
     faces_files, verts_8_files, verts_20_files, model_data_hex = get_faces_verts_files(model_data_file)
     if not faces_files or not verts_8_files or not verts_20_files:
         return None, None
