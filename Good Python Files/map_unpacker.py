@@ -53,15 +53,15 @@ def unpack_map(main_file, folder_name='Other', version='2_9_0_1'):
     model_refs = get_model_refs(model_refs_hex)
     copy_counts = get_copy_counts(copy_count_hex)
     transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales)
-    if main_file == '067D-000009E7':
-        LARGE_total_end_files = 10  # LARGE
-        for i in range(LARGE_total_end_files):  # LARGE
-            split_len = int(len(transforms_array)/LARGE_total_end_files)  # LARGE
-            obj_strings = get_model_obj_strings(transforms_array[split_len*i:split_len*(i+1)], version)  # LARGE
-            write_obj_strings(obj_strings, folder_name, main_file + str(i))  # LARGE
-    else:
-        obj_strings = get_model_obj_strings(transforms_array, version)
-        write_obj_strings(obj_strings, folder_name, main_file)
+    # if main_file == '067D-000009E7':
+    #     LARGE_total_end_files = 2  # LARGE
+    #     for i in range(LARGE_total_end_files):  # LARGE
+    #         split_len = int(len(transforms_array)/LARGE_total_end_files)  # LARGE
+    #         obj_strings = get_model_obj_strings(transforms_array[split_len*i:split_len*(i+1)], version)  # LARGE
+    #         write_obj_strings(obj_strings, folder_name, main_file + '_' + str(i))  # LARGE
+    # else:
+    obj_strings = get_model_obj_strings(transforms_array, version)
+    write_obj_strings(obj_strings, folder_name, main_file)
 
 
 def get_hex_from_pkg(file, version):
@@ -170,17 +170,19 @@ def get_model_obj_strings(transforms_array, version):
     }
 
     for i, transform_array in enumerate(transforms_array):
-        # if i > 440:
+        if i > 440:
+            return obj_strings
+        elif i < 435:
+            continue
+        # if i > 4:
         #     return obj_strings
-        # elif i < 435:
-        #     continue
         model_file = model_unpacker.get_file_from_hash(get_flipped_hex(transform_array[0], 8))
         model_data_file = model_unpacker.get_model_data_file(model_file)
         submeshes_verts, submeshes_faces = model_unpacker.get_verts_faces_data(model_data_file, version)
         if not submeshes_verts or not submeshes_faces:
             print('Skipping current model')
             continue
-        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]} {nums}')
+        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]} {nums} {transform_array}')
         if transform_array[0] in manual_scale_modifications.keys():
             manual_scale_mod = manual_scale_modifications[transform_array[0]]
         else:
@@ -188,16 +190,17 @@ def get_model_obj_strings(transforms_array, version):
 
         for copy_id, transform in enumerate(transform_array[1]):
             nums += 1
-            for index_2 in submeshes_verts.keys():
-                index_2_verts = []
-                [[index_2_verts.append(y) for y in x] for x in submeshes_verts[index_2]]
-                r_verts_data = rotate_verts(index_2_verts, transform[0])
-                loc_verts = set_vert_locations(r_verts_data, transform[1], manual_scale_mod)
+            # TODO DO SCALING HERE (and rotating I guess too)
 
-                offset = 0
+            all_index_2_verts = []
+            [[[all_index_2_verts.append(z) for z in y] for y in x] for x in submeshes_verts.values()]
+            r_verts_data = rotate_verts(all_index_2_verts, transform[0])
+            loc_verts = set_vert_locations(r_verts_data, transform[1], manual_scale_mod)
+            offset = 0
+            for index_2 in submeshes_verts.keys():
                 for index_3 in range(len(submeshes_verts[index_2])):
                     new_verts = loc_verts[offset:offset + len(submeshes_verts[index_2][index_3])]
-                    offset += len(new_verts)
+                    offset += len(submeshes_verts[index_2][index_3])
                     adjusted_faces_data, max_vert_used = model_unpacker.adjust_faces_data(submeshes_faces[index_2][index_3],
                                                                                           max_vert_used)
                     obj_str = model_unpacker.get_obj_str(adjusted_faces_data, new_verts)
@@ -260,5 +263,5 @@ def unpack_folder(pkg_name, version):
 
 
 if __name__ == '__main__':
-    # unpack_map('036A-00001783')
-    unpack_folder('sky_island_067d', '2_9_0_1')
+    unpack_map('0369-00000B77')
+    # unpack_folder('sky_island_067d', '2_9_0_1')
