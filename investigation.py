@@ -164,54 +164,59 @@ def get_all_stride_data():
 # get_stride_data('0369-00000C87')
 # get_stride_data('0369-00001C49')
 # get_stride_data('0369-00000BED')
-faces_12da_array = get_faces_data('globals_01fe', '01FE-000012DA')
-with open('faces_12da.txt', 'w') as f:
-    for row in faces_12da_array:
-        f.write(row + '\n')
-get_stride_data('globals_01fe', '01FE-000012E0')
-get_stride_data('globals_01fe', '01FE-000012E1')
-print('\n')
-print('\n')
-faces_734_array = get_faces_data('city_tower_d2_0369', '0369-00000734')
-with open('faces_734.txt', 'w') as f:
-    for row in faces_734_array:
-        f.write(row + '\n')
-get_stride_data('city_tower_d2_0369', '0369-000008AF')
-get_stride_data('city_tower_d2_0369', '0369-00000A1E')
-print('\n')
-print('\n')
-get_faces_data('city_tower_d2_0369', '0369-00000383')
-get_stride_data('city_tower_d2_0369', '0369-00000388')
+# faces_12da_array = get_faces_data('globals_01fe', '01FE-000012DA')
+# with open('faces_12da.txt', 'w') as f:
+#     for row in faces_12da_array:
+#         f.write(row + '\n')
+# get_stride_data('globals_01fe', '01FE-000012E0')
+# get_stride_data('globals_01fe', '01FE-000012E1')
+# print('\n')
+# print('\n')
+# faces_734_array = get_faces_data('city_tower_d2_0369', '0369-00000734')
+# with open('faces_734.txt', 'w') as f:
+#     for row in faces_734_array:
+#         f.write(row + '\n')
+# get_stride_data('city_tower_d2_0369', '0369-000008AF')
+# get_stride_data('city_tower_d2_0369', '0369-00000A1E')
+# print('\n')
+# print('\n')
+# get_faces_data('city_tower_d2_0369', '0369-00000383')
+# get_stride_data('city_tower_d2_0369', '0369-00000388')
+#
+# get_stride_data('city_tower_d2_0369', '0369-0000038A')
+# print('\n')
+# faces_38c_array = get_faces_data('city_tower_d2_0369', '0369-0000038C')
+# with open('faces_38c.txt', 'w') as f:
+#     for row in faces_38c_array:
+#         f.write(row + '\n')
+# stride_390_array = get_stride_data('city_tower_d2_0369', '0369-00000390')
+# with open('verts_390.txt', 'w') as f:
+#     for coord in stride_390_array:
+#         line = f'v {coord[0]} {coord[1]} {coord[2]}\n'
+#         f.write(line)
+# get_stride_data('city_tower_d2_0369', '0369-00000391')
+# print('\n')
+# get_faces_data('city_tower_d2_0369', '0369-00000394')
+# get_stride_data('city_tower_d2_0369', '0369-00000397')
+# get_stride_data('city_tower_d2_0369', '0369-0000039D')
+#
+#
+# faces_17c4 = get_faces_data('globals_0238', '0238-000017C4')
+# with open('faces_17c4.txt', 'w') as f:
+#     for row in faces_17c4:
+#         f.write(row + '\n')
+#
+# faces_d04 = get_faces_data('activities_022e', '022E-00000D04')
+# with open('faces_d04.txt', 'w') as f:
+#     for row in faces_d04:
+#         f.write(row + '\n')
+#
+# faces_56 = get_faces_data('city_tower_d2_0369', '0369-00000056')
+# with open('faces_56.txt', 'w') as f:
+#     for row in faces_56:
+#         f.write(row + '\n')
 
-get_stride_data('city_tower_d2_0369', '0369-0000038A')
-print('\n')
-faces_38c_array = get_faces_data('city_tower_d2_0369', '0369-0000038C')
-with open('faces_38c.txt', 'w') as f:
-    for row in faces_38c_array:
-        f.write(row + '\n')
-stride_390_array = get_stride_data('city_tower_d2_0369', '0369-00000390')
-with open('verts_390.txt', 'w') as f:
-    for coord in stride_390_array:
-        line = f'v {coord[0]} {coord[1]} {coord[2]}\n'
-        f.write(line)
-get_stride_data('city_tower_d2_0369', '0369-00000391')
-print('\n')
-get_faces_data('city_tower_d2_0369', '0369-00000394')
-get_stride_data('city_tower_d2_0369', '0369-00000397')
-get_stride_data('city_tower_d2_0369', '0369-0000039D')
-
-
-faces_17c4 = get_faces_data('globals_0238', '0238-000017C4')
-with open('faces_17c4.txt', 'w') as f:
-    for row in faces_17c4:
-        f.write(row + '\n')
-
-faces_d04 = get_faces_data('activities_022e', '022E-00000D04')
-with open('faces_d04.txt', 'w') as f:
-    for row in faces_d04:
-        f.write(row + '\n')
-
-faces_56 = get_faces_data('city_tower_d2_0369', '0369-00000056')
-with open('faces_56.txt', 'w') as f:
-    for row in faces_56:
+faces = get_faces_data('globals_0238', '0238-00001049')
+with open('faces_!!!.txt', 'w') as f:
+    for row in faces:
         f.write(row + '\n')

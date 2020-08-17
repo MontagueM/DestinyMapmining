@@ -49,23 +49,24 @@ def unpack_map(main_file, folder_name='Other', version='2_9_0_1'):
     # If the file is too large you can uncomment the LARGE stuff
     scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file, version)
 
-    rotations, scales = get_transform_data(transform_hex, scale_hex)
+    rotations, scales, scale_coords_extra, modifiers = get_transform_data(transform_hex, scale_hex)
     model_refs = get_model_refs(model_refs_hex)
     copy_counts = get_copy_counts(copy_count_hex)
     transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales)
-    # if main_file == '067D-000009E7':
-    #     LARGE_total_end_files = 2  # LARGE
+    # if main_file == '036D-00000256':  # LARGE
+    #     LARGE_total_end_files = 6  # LARGE
     #     for i in range(LARGE_total_end_files):  # LARGE
     #         split_len = int(len(transforms_array)/LARGE_total_end_files)  # LARGE
-    #         obj_strings = get_model_obj_strings(transforms_array[split_len*i:split_len*(i+1)], version)  # LARGE
+    #         obj_strings = get_model_obj_strings(transforms_array[split_len*i:split_len*(i+1)], version, scale_coords_extra, modifiers)  # LARGE
     #         write_obj_strings(obj_strings, folder_name, main_file + '_' + str(i))  # LARGE
     # else:
-    obj_strings = get_model_obj_strings(transforms_array, version)
+    #     return  # LARGE
+    obj_strings = get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers)
     write_obj_strings(obj_strings, folder_name, main_file)
 
 
 def get_hex_from_pkg(file, version):
-    pkgs_dir = f'D:/D2_Datamining/Package Unpacker/{version}/output_all'
+    pkgs_dir = f'C:/d2_output_2_9_1_0/'
 
     main_pkg = model_unpacker.get_pkg_name(file)
     main_hex = get_hex_data(f'{pkgs_dir}/{main_pkg}/{file}.bin')
@@ -105,7 +106,7 @@ def get_transform_data(transform_hex, scale_hex):
         floats = []
         for hex_float in hex_floats:
             float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
-            floats.append(round(float_value, 3))
+            floats.append(float_value)
         rotations.append(floats)
 
     # Scale
@@ -113,6 +114,7 @@ def get_transform_data(transform_hex, scale_hex):
 
     min_scale_coords = []
     max_scale_coords = []
+    scale_coords_extra = []
     for e in scale_entries_hex:
         hexes = [e[:12 * 2], e[16 * 2:28 * 2]]
         for k, h in enumerate(hexes):
@@ -130,8 +132,45 @@ def get_transform_data(transform_hex, scale_hex):
             elif k == 1:
                 max_scale_coords.append(coord)
 
+        hex_data = e[32 * 2:36 * 2]
+        coord = []
+        for j in range(2):
+            selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
+            exp_bitdepth = 0
+            mantissa_bitdepth = 15
+            bias = 2 ** (exp_bitdepth - 1) - 1
+            mantissa_division = 2 ** mantissa_bitdepth
+            int_fs = int(selection, 16)
+            mantissa = int_fs & 2 ** mantissa_bitdepth - 1
+            mantissa_abs = mantissa / mantissa_division
+            exponent = (int_fs >> mantissa_bitdepth) & 2 ** exp_bitdepth - 1
+            negative = int_fs >> 15
+            # print(mantissa, negative)
+            if exponent == 0:
+                flt = mantissa_abs * 2 ** (bias - 1)
+            else:
+                print('Error!!')
+                quit()
+            if negative:
+                # flt += -0.35
+                flt *= -1
+            coord.append(flt)
+        scale_coords_extra.append(coord)
+
+    # Getting modifier number from b77
+    modifiers = []
+    for e in rotation_entries_hex:
+        hex = e[28 * 2:32 * 2]
+        hex_floats = [hex[i:i + 8] for i in range(0, len(hex), 8)]
+        floats = []
+        for hex_float in hex_floats:
+            float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
+            floats.append(float_value)
+        modifier = floats
+        modifiers.append(modifier)
+
     scale_coords = [[min_scale_coords[i], max_scale_coords[i]] for i in range(len(min_scale_coords))]
-    return rotations, scale_coords
+    return rotations, scale_coords, scale_coords_extra, modifiers
 
 
 def get_model_refs(model_refs_hex):
@@ -161,20 +200,17 @@ def get_transforms_array(model_refs, copy_counts, rotations, scales):
     return transforms_array
 
 
-def get_model_obj_strings(transforms_array, version):
+def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers):
     obj_strings = []
     max_vert_used = 0
     nums = 0
-    manual_scale_modifications = {
-        # '2E24ED80': [0.536, 0.457, 0.391],
-    }
 
     for i, transform_array in enumerate(transforms_array):
-        if i > 440:
-            return obj_strings
-        elif i < 435:
-            continue
-        # if i > 4:
+        # if i > 440:
+        #     return obj_strings
+        # elif i < 435:
+        #     continue
+        # if i > 0:
         #     return obj_strings
         model_file = model_unpacker.get_file_from_hash(get_flipped_hex(transform_array[0], 8))
         model_data_file = model_unpacker.get_model_data_file(model_file)
@@ -182,20 +218,16 @@ def get_model_obj_strings(transforms_array, version):
         if not submeshes_verts or not submeshes_faces:
             print('Skipping current model')
             continue
-        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]} {nums} {transform_array}')
-        if transform_array[0] in manual_scale_modifications.keys():
-            manual_scale_mod = manual_scale_modifications[transform_array[0]]
-        else:
-            manual_scale_mod = [1, 1, 1]
+        print(f'Getting obj {i + 1}/{len(transforms_array)} {transform_array[0]} {nums}')
 
         for copy_id, transform in enumerate(transform_array[1]):
+            # print(f'scales {transform[1]} | mod {modifiers[nums]} | extra scale {scale_coords_extra[nums]}')
             nums += 1
-            # TODO DO SCALING HERE (and rotating I guess too)
 
             all_index_2_verts = []
             [[[all_index_2_verts.append(z) for z in y] for y in x] for x in submeshes_verts.values()]
             r_verts_data = rotate_verts(all_index_2_verts, transform[0])
-            loc_verts = set_vert_locations(r_verts_data, transform[1], manual_scale_mod)
+            loc_verts = set_vert_locations(r_verts_data, transform[1])
             offset = 0
             for index_2 in submeshes_verts.keys():
                 for index_3 in range(len(submeshes_verts[index_2])):
@@ -209,7 +241,7 @@ def get_model_obj_strings(transforms_array, version):
     return obj_strings
 
 
-def set_vert_locations(verts, scale_info, manual_scale_mod):
+def set_vert_locations(verts, scale_info):
     coords1 = scale_info[0]
     coords2 = scale_info[1]
     x = [x[0] for x in verts]
@@ -228,7 +260,7 @@ def set_vert_locations(verts, scale_info, manual_scale_mod):
                 interp = c_min
             else:
                 c_range = c_max - c_min
-                interp = (((point - t_min) / t_range) * c_range + c_min) * manual_scale_mod[i]
+                interp = (((point - t_min) / t_range) * c_range + c_min)
             output[i].append(interp)
     return [[-output[0][i], output[2][i], output[1][i]] for i in range(len(x))]
 
@@ -263,5 +295,5 @@ def unpack_folder(pkg_name, version):
 
 
 if __name__ == '__main__':
-    unpack_map('0369-00000B77')
-    # unpack_folder('sky_island_067d', '2_9_0_1')
+    # unpack_map('0369-00000B77')
+    unpack_folder('city_tower_d2_0369', '2_9_1_2_all')

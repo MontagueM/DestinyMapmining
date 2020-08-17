@@ -4,7 +4,8 @@ from dataclasses import dataclass, fields
 import numpy as np
 import binascii
 import os
-import map_unpacker
+
+version = '2_9_0_1'
 
 
 @dataclass
@@ -99,6 +100,8 @@ def get_referenced_file(file):
         return None, None, None
     entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG')}
     entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID')}
+    if file not in entries_refpkg.keys():
+        return None, None, None
     ref_pkg_id = entries_refpkg[file][2:]
     ref_pkg_name = get_pkg_name(f'{ref_pkg_id}-')
     if not ref_pkg_name:
@@ -167,6 +170,8 @@ def get_verts_faces_data(model_data_file,version):
         verts_8_file = verts_8_files[i]
         verts_20_file = verts_20_files[i]
         faces_data = get_faces_data(faces_file)
+        if not verts_8_file:
+            return None, None
         verts_8_data = get_verts_data(verts_8_file, b_20=False)
         # Even though this may be None it should be okay.
         verts_20_data = get_verts_data(verts_20_file, b_20=True)

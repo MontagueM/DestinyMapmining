@@ -22,24 +22,9 @@ def hash_pkg(hsh):
     return f'{fill_hex_with_zeros(first_hex[2:], 4)}-{fill_hex_with_zeros(second_hex[2:], 8)}'.upper()
 
 
-hashes = ['6C23ED80',
-          'C82CED80',
-          '9824ED80',
-          '9C24ED80',
-          '7BDDBF80',
-          '422DED80',
-          '6725ED80',
-          '6825ED80',
-          '6B25ED80',
-          'AC54C780',
-          '472DED80',
-          '8625ED80',
-          '8925ED80',
-          '8A25ED80',
-          '8C25ED80',
-          ]
-
-# hashes = ['4124ED80']
+hashes = [
+    '885D5881'
+]
 
 for h in hashes:
     file_name = hash_pkg(get_flipped_hex(h, 8))
