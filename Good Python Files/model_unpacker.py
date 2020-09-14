@@ -5,7 +5,7 @@ import numpy as np
 import binascii
 import os
 
-version = '2_9_0_1'
+version = '2_9_1_2_all'
 
 
 @dataclass
@@ -76,7 +76,7 @@ def get_header(file_hex, header):
     return header
 
 
-test_dir = 'D:/D2_Datamining/Package Unpacker/2_9_0_1/output_all'
+test_dir = 'C:/d2_output/'
 
 
 def get_pkg_name(file):
@@ -131,13 +131,18 @@ def get_model(model_file_hash):
     submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file, version)
     obj_strings = []
     max_vert_used = 0
+    # all_verts_str = ''  # joined obj
+    # all_faces_str = ''  # joined obj
     for index_2 in range(len(submeshes_verts.keys())):
         for index_3 in range(len(submeshes_verts[index_2])):
             adjusted_faces_data, max_vert_used = adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
-            obj_str = get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3])
-            obj_str = f'o {model_file_hash}_0_{index_2}_{index_3}\n' + obj_str
-            obj_strings.append(obj_str)
+            obj_str = get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3])  # replace with obj_str = for separated obj, otherwise verts_str, faces_str = for joined obj
+            obj_str += f'o {model_file_hash}_0_{index_2}_{index_3}\n'  # separated obj
+            obj_strings.append(obj_str)  # separated obj
+            # all_verts_str += verts_str  # joined obj
+            # all_faces_str += faces_str  # joined obj
 
+    # obj_strings = f'o {model_file_hash}\n' + all_verts_str + all_faces_str  # joined obj
     write_obj(obj_strings, model_file_hash)
 
 
@@ -349,11 +354,11 @@ def get_obj_str(faces_data, verts_data):
     faces_str = ''
     for face in faces_data:
         faces_str += f'f {face[0]}// {face[1]}// {face[2]}//\n'
-    return verts_str + faces_str
+    return verts_str + faces_str  # for sep remove , replace with +
 
 
 def write_obj(obj_strings, hsh):
-    with open(f'unpacked_objects/{hsh}.obj', 'w') as f:
+    with open(f'C:/d2_model_temp/texture_models/{hsh}.obj', 'w') as f:
         for string in obj_strings:
             f.write(string)
     print('Written to file.')
@@ -368,4 +373,4 @@ if __name__ == '__main__':
     - mess around until you find the answer
     """
     #7C23ED80
-    get_model('7C23ED80')
+    get_model('CCC7F380')

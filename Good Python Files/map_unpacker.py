@@ -53,12 +53,12 @@ def unpack_map(main_file, folder_name='Other', version='2_9_0_1'):
     model_refs = get_model_refs(model_refs_hex)
     copy_counts = get_copy_counts(copy_count_hex)
     transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales)
-    # if main_file == '036D-00000256':  # LARGE
-    #     LARGE_total_end_files = 6  # LARGE
+    # if main_file == '0932-000001FE':  # LARGE
+    #     LARGE_total_end_files = 2  # LARGE
     #     for i in range(LARGE_total_end_files):  # LARGE
     #         split_len = int(len(transforms_array)/LARGE_total_end_files)  # LARGE
     #         obj_strings = get_model_obj_strings(transforms_array[split_len*i:split_len*(i+1)], version, scale_coords_extra, modifiers)  # LARGE
-    #         write_obj_strings(obj_strings, folder_name, main_file + '_' + str(i))  # LARGE
+    #         write_obj_strings(obj_strings, folder_name, main_file, i)  # LARGE
     # else:
     #     return  # LARGE
     obj_strings = get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers)
@@ -66,13 +66,13 @@ def unpack_map(main_file, folder_name='Other', version='2_9_0_1'):
 
 
 def get_hex_from_pkg(file, version):
-    pkgs_dir = f'C:/d2_output_2_9_1_0/'
+    pkgs_dir = 'C:/d2_output/'
 
     main_pkg = model_unpacker.get_pkg_name(file)
-    main_hex = get_hex_data(f'{pkgs_dir}/{main_pkg}/{file}.bin')
+    main_hex = get_hex_data(f'{pkgs_dir}{main_pkg}/{file}.bin')
     scales_file = get_scales_file(main_hex)
     scales_pkg = model_unpacker.get_pkg_name(scales_file)
-    scale_hex = get_hex_data(f'{pkgs_dir}/{scales_pkg}/{scales_file}.bin')[48 * 2:]
+    scale_hex = get_hex_data(f'{pkgs_dir}{scales_pkg}/{scales_file}.bin')[48 * 2:]
 
     transform_count = int(get_flipped_hex(main_hex[64*2:64*2+4], 4), 16)
     transform_offset = 192
@@ -96,6 +96,25 @@ def get_scales_file(main_hex):
     return file_name
 
 
+def get_float16(hex_data, j):
+    selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
+    mantissa_bitdepth = 15
+    exp_bitdepth = 15 - mantissa_bitdepth
+    bias = 2 ** (exp_bitdepth - 1) - 1
+    mantissa_division = 2 ** mantissa_bitdepth
+    int_fs = int(selection, 16)
+    mantissa = int_fs & 2 ** mantissa_bitdepth - 1
+    mantissa_abs = mantissa / mantissa_division
+    exponent = (int_fs >> mantissa_bitdepth) & 2 ** exp_bitdepth - 1
+    negative = int_fs >> mantissa_bitdepth
+    if exponent == 0:
+        flt = mantissa_abs * 2 ** (bias - 1)
+    else:
+        print('Incorrect file given.')
+        return
+    return flt, negative
+
+
 def get_transform_data(transform_hex, scale_hex):
     rotation_entries_hex = [transform_hex[i:i + 48 * 2] for i in range(0, len(transform_hex), 48 * 2)]
 
@@ -111,7 +130,6 @@ def get_transform_data(transform_hex, scale_hex):
 
     # Scale
     scale_entries_hex = [scale_hex[i:i + 48 * 2] for i in range(0, len(scale_hex), 48 * 2)]
-
     min_scale_coords = []
     max_scale_coords = []
     scale_coords_extra = []
@@ -132,42 +150,42 @@ def get_transform_data(transform_hex, scale_hex):
             elif k == 1:
                 max_scale_coords.append(coord)
 
-        hex_data = e[32 * 2:36 * 2]
-        coord = []
-        for j in range(2):
-            selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
-            exp_bitdepth = 0
-            mantissa_bitdepth = 15
-            bias = 2 ** (exp_bitdepth - 1) - 1
-            mantissa_division = 2 ** mantissa_bitdepth
-            int_fs = int(selection, 16)
-            mantissa = int_fs & 2 ** mantissa_bitdepth - 1
-            mantissa_abs = mantissa / mantissa_division
-            exponent = (int_fs >> mantissa_bitdepth) & 2 ** exp_bitdepth - 1
-            negative = int_fs >> 15
-            # print(mantissa, negative)
-            if exponent == 0:
-                flt = mantissa_abs * 2 ** (bias - 1)
-            else:
-                print('Error!!')
-                quit()
-            if negative:
-                # flt += -0.35
-                flt *= -1
-            coord.append(flt)
-        scale_coords_extra.append(coord)
+        # hex_data = e[32 * 2:36 * 2]
+        # coord = []
+        # for j in range(2):
+        #     selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
+        #     exp_bitdepth = 0
+        #     mantissa_bitdepth = 15
+        #     bias = 2 ** (exp_bitdepth - 1) - 1
+        #     mantissa_division = 2 ** mantissa_bitdepth
+        #     int_fs = int(selection, 16)
+        #     mantissa = int_fs & 2 ** mantissa_bitdepth - 1
+        #     mantissa_abs = mantissa / mantissa_division
+        #     exponent = (int_fs >> mantissa_bitdepth) & 2 ** exp_bitdepth - 1
+        #     negative = int_fs >> 15
+        #     # print(mantissa, negative)
+        #     if exponent == 0:
+        #         flt = mantissa_abs * 2 ** (bias - 1)
+        #     else:
+        #         print('Error!!')
+        #         quit()
+        #     if negative:
+        #         flt += -0.35
+        #         # flt *= -1
+        #     coord.append(flt)
+        # scale_coords_extra.append(coord)
 
     # Getting modifier number from b77
     modifiers = []
-    for e in rotation_entries_hex:
-        hex = e[28 * 2:32 * 2]
-        hex_floats = [hex[i:i + 8] for i in range(0, len(hex), 8)]
-        floats = []
-        for hex_float in hex_floats:
-            float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
-            floats.append(float_value)
-        modifier = floats
-        modifiers.append(modifier)
+    # for e in rotation_entries_hex:
+    #     hex = e[28 * 2:32 * 2]
+    #     hex_floats = [hex[i:i + 8] for i in range(0, len(hex), 8)]
+    #     floats = []
+    #     for hex_float in hex_floats:
+    #         float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
+    #         floats.append(float_value)
+    #     modifier = floats
+    #     modifiers.append(modifier)
 
     scale_coords = [[min_scale_coords[i], max_scale_coords[i]] for i in range(len(min_scale_coords))]
     return rotations, scale_coords, scale_coords_extra, modifiers
@@ -205,6 +223,9 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
     max_vert_used = 0
     nums = 0
 
+    all_verts_str = ''
+    all_faces_str = ''
+
     for i, transform_array in enumerate(transforms_array):
         # if i > 440:
         #     return obj_strings
@@ -235,9 +256,13 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
                     offset += len(submeshes_verts[index_2][index_3])
                     adjusted_faces_data, max_vert_used = model_unpacker.adjust_faces_data(submeshes_faces[index_2][index_3],
                                                                                           max_vert_used)
-                    obj_str = model_unpacker.get_obj_str(adjusted_faces_data, new_verts)
-                    obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str
-                    obj_strings.append(obj_str)
+                    obj_str = model_unpacker.get_obj_str(adjusted_faces_data, new_verts) # for sep
+                    # obj_str = model_unpacker.get_obj_str(submeshes_faces[index_2][index_3], new_verts)
+                    # all_verts_str += verts_str
+                    # all_faces_str += faces_str
+                    obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str  # for sep
+                    obj_strings.append(obj_str)  # for sep
+    # obj_strings = f'o obj\n' + all_verts_str + all_faces_str
     return obj_strings
 
 
@@ -262,7 +287,7 @@ def set_vert_locations(verts, scale_info):
                 c_range = c_max - c_min
                 interp = (((point - t_min) / t_range) * c_range + c_min)
             output[i].append(interp)
-    return [[-output[0][i], output[2][i], output[1][i]] for i in range(len(x))]
+    return [[output[0][i], output[1][i], output[2][i]] for i in range(len(x))]
 
 
 def rotate_verts(verts_data, rotation_transform):
@@ -271,15 +296,26 @@ def rotate_verts(verts_data, rotation_transform):
     return quat_rots.tolist()
 
 
-def write_obj_strings(obj_strings, folder_name, file_name):
+def write_obj_strings(obj_strings, folder_name, file_name, i=None):
     try:
-        os.mkdir(f'unpacked_objects/{folder_name}')
+        os.mkdir(f'C:/d2_maps/{folder_name}')
     except FileExistsError:
         pass
-    with open(f'unpacked_objects/{folder_name}/{file_name}.obj', 'w') as f:
-        for string in obj_strings:
-            f.write(string)
-    print(f'Written to {folder_name}/{file_name}.obj')
+    if i:
+        try:
+            os.mkdir(f'C:/d2_maps/{folder_name}/{file_name}')
+        except FileExistsError:
+            pass
+        with open(f'C:/d2_maps/{folder_name}/{file_name}/{file_name}_{i}.obj', 'w') as f:
+            for string in obj_strings:
+                f.write(string)
+        print(f'Written to C:/d2_maps/{folder_name}/{file_name}/{file_name}_{i}.obj')
+    else:
+        with open(f'C:/d2_maps/{folder_name}/{file_name}.obj', 'w') as f:
+            for string in obj_strings:
+                f.write(string)
+        print(f'Written to C:/d2_maps/{folder_name}/{file_name}.obj')
+
 
 
 def unpack_folder(pkg_name, version):
@@ -290,10 +326,12 @@ def unpack_folder(pkg_name, version):
     file_names = sorted(entries_refid.keys(), key=lambda x: entries_size[x])
     for file_name in file_names:
         if file_name in entries_refpkg.keys():
+            if '1A4A' not in file_name:
+                continue
             print(f'Unpacking {file_name}')
             unpack_map(file_name, folder_name=pkg_name, version=version)
 
 
 if __name__ == '__main__':
     # unpack_map('0369-00000B77')
-    unpack_folder('city_tower_d2_0369', '2_9_1_2_all')
+    unpack_folder('city_tower_d2_0369', '2_9_2_0_all')
