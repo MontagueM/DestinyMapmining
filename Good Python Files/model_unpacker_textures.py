@@ -128,9 +128,8 @@ def get_model(model_file_hash):
     pkg_db.start_db_connection(version)
     model_file = get_file_from_hash(get_flipped_hex(model_file_hash, 8))
     model_data_file = get_model_data_file(model_file)
-    all_file_info = {x[0]: dict(zip(['RefID', 'RefPKG', 'FileType'], x[1:])) for x in
-                     pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
-    submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file, all_file_info)
+    print(f'1: {model_file} 2: {model_data_file}')
+    submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file, version)
     obj_strings = []
     max_vert_used = 0
     # all_verts_str = ''  # joined obj
@@ -138,14 +137,27 @@ def get_model(model_file_hash):
     for index_2 in range(len(submeshes_verts.keys())):
         for index_3 in range(len(submeshes_verts[index_2])):
             adjusted_faces_data, max_vert_used = adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
-            obj_str = get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3])  # replace with obj_str = for separated obj, otherwise verts_str, faces_str = for joined obj
-            obj_str += f'o {model_file_hash}_0_{index_2}_{index_3}\n'  # separated obj
+            obj_str = f'o {model_file_hash}_0_{index_2}_{index_3}\n'  # separated obj
+            shifted_faces = shift_faces_down(adjusted_faces_data)
+            obj_str += get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3])  # replace with obj_str = for separated obj, otherwise verts_str, faces_str = for joined obj
             obj_strings.append(obj_str)  # separated obj
             # all_verts_str += verts_str  # joined obj
             # all_faces_str += faces_str  # joined obj
-
+            write_obj(obj_str, f'{model_file_hash}_0_{index_2}_{index_3}')
     # obj_strings = f'o {model_file_hash}\n' + all_verts_str + all_faces_str  # joined obj
-    write_obj(obj_strings, model_file_hash)
+    # write_obj(obj_strings, model_file_hash)
+
+
+def shift_faces_down(faces_data):
+    a_min = faces_data[0][0]
+    for f in faces_data:
+        for i in f:
+            if i < a_min:
+                a_min = i
+    for i, f in enumerate(faces_data):
+        for j, x in enumerate(f):
+            faces_data[i][j] -= a_min - 1
+    return faces_data
 
 
 def adjust_faces_data(faces_data, max_vert_used):
@@ -165,39 +177,45 @@ def adjust_faces_data(faces_data, max_vert_used):
     return new_faces_data, max(all_v)
 
 
-def get_verts_faces_data(model_data_file, all_file_info):
+def get_verts_faces_data(model_data_file,version):
     all_faces_data = []
     all_verts_8_data = []
     all_verts_20_data = []
-    # pkg_db.start_db_connection(version)
+    all_verts_data = []
+    pkg_db.start_db_connection(version)
     faces_files, verts_8_files, verts_20_files, model_data_hex = get_faces_verts_files(model_data_file)
     if not faces_files or not verts_8_files or not verts_20_files:
         return None, None
     for i, faces_file in enumerate(faces_files):
         verts_8_file = verts_8_files[i]
         verts_20_file = verts_20_files[i]
-        faces_data = get_faces_data(faces_file, all_file_info)
+        faces_data = get_faces_data(faces_file)
         if not verts_8_file:
             return None, None
-        verts_8_data = get_verts_data(verts_8_file, all_file_info, b_20=False)
+        verts_8_data = get_verts_data(verts_8_file)
         # Even though this may be None it should be okay.
-        verts_20_data = get_verts_data(verts_20_file, all_file_info, b_20=True)
-        if not verts_8_data or verts_8_data == []:
+        verts_20_data = get_verts_data(verts_20_file)
+        if not verts_8_data or not verts_8_data:
             return None, None
-        if not faces_data or faces_data == []:
+        if not faces_data or not faces_data:
             return None, None
         all_faces_data.append(faces_data)
         all_verts_8_data.append(verts_8_data)
         all_verts_20_data.append(verts_20_data)
+        # verts_data = verts_8_data + verts_20_data
+        if verts_20_data:
+            verts_data = [verts_8_data[i] + verts_20_data[i] for i in range(len(verts_8_data))]
+        else:
+            verts_data = verts_8_data
+        all_verts_data.append(verts_data)
     submeshes_faces, submeshes_entries = separate_submeshes_remove_lods(model_data_hex, all_faces_data)
     submeshes_verts = {x: [] for x in submeshes_faces.keys()}
     for i in submeshes_faces.keys():
         for j, faces in enumerate(submeshes_faces[i]):
             if submeshes_entries[i][j].EntryType == 769:
-                submeshes_verts[i].append(trim_verts_data(all_verts_8_data[i], faces))
+                submeshes_verts[i].append(trim_verts_data(all_verts_data[i], faces))
             elif submeshes_entries[i][j].EntryType == 770:
-                # TODO currently only thing that doesn't work. Literally everything else does.
-                submeshes_verts[i].append(trim_verts_data(all_verts_8_data[i], faces))
+                submeshes_verts[i].append(trim_verts_data(all_verts_data[i], faces))
 
     return submeshes_verts, submeshes_faces
 
@@ -278,11 +296,8 @@ def separate_submeshes_remove_lods(model_data_hex, all_faces_data):
     return submeshes, ret_sub_entries
 
 
-def get_faces_data(faces_file, all_file_info):
-    ref_file = f"{all_file_info[faces_file]['RefPKG'][2:]}-{all_file_info[faces_file]['RefID'][2:]}"
-    ref_pkg_name = get_pkg_name(ref_file)
-    ref_file_type = all_file_info[ref_file]['FileType']
-    # ref_pkg_name, ref_file, ref_file_type = get_referenced_file(faces_file)
+def get_faces_data(faces_file):
+    ref_pkg_name, ref_file, ref_file_type = get_referenced_file(faces_file)
     faces = []
     if ref_file_type == "Faces Header":
         faces_hex = get_hex_data(f'{test_dir}/{ref_pkg_name}/{ref_file}.bin')
@@ -298,20 +313,36 @@ def get_faces_data(faces_file, all_file_info):
         return None
 
 
-def get_verts_data(verts_file, all_file_info, b_20):
-    # TODO deal with this
+def get_float16(hex_data, j):
+    selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
+    mantissa_bitdepth = 15
+    exp_bitdepth = 15 - mantissa_bitdepth
+    bias = 2 ** (exp_bitdepth - 1) - 1
+    mantissa_division = 2 ** mantissa_bitdepth
+    int_fs = int(selection, 16)
+    mantissa = int_fs & 2 ** mantissa_bitdepth - 1
+    mantissa_abs = mantissa / mantissa_division
+    exponent = (int_fs >> mantissa_bitdepth) & 2 ** exp_bitdepth - 1
+    negative = int_fs >> mantissa_bitdepth
+    if exponent == 0:
+        flt = mantissa_abs * 2 ** (bias - 1)
+    else:
+        print('Incorrect file given.')
+        return
+    return flt, negative
+
+
+def get_verts_data(verts_file):
     pkg_name = get_pkg_name(verts_file)
     if not pkg_name:
         return None
-    ref_file = f"{all_file_info[verts_file]['RefPKG'][2:]}-{all_file_info[verts_file]['RefID'][2:]}"
-    ref_pkg_name = get_pkg_name(ref_file)
-    ref_file_type = all_file_info[ref_file]['FileType']
-    # ref_pkg_name, ref_file, ref_file_type = get_referenced_file(verts_file)
+    ref_pkg_name, ref_file, ref_file_type = get_referenced_file(verts_file)
     if ref_file_type == "Stride Header":
         header_hex = get_hex_data(f'{test_dir}/{pkg_name}/{verts_file}.bin')
         stride_header = get_header(header_hex, Stride12Header())
 
         stride_hex = get_hex_data(f'{test_dir}/{ref_pkg_name}/{ref_file}.bin')
+        print(f'{test_dir}{ref_pkg_name}/{ref_file}.bin')
 
         hex_data_split = [stride_hex[i:i + stride_header.StrideLength * 2] for i in
                           range(0, len(stride_hex), stride_header.StrideLength * 2)]
@@ -319,29 +350,33 @@ def get_verts_data(verts_file, all_file_info, b_20):
         print(f'Verts: Incorrect type of file {ref_file_type} for ref file {ref_file} verts file {verts_file}')
         return None
 
+    if stride_header.StrideLength == 20:
+        num = 10
+        magic_start = 36
+        magic_end = 40
+    elif stride_header.StrideLength == 8:
+        num = 3
+        magic_start = 12
+        magic_end = 16
+    elif stride_header.StrideLength == 12:
+        num = 3
+        magic_start = 12
+        magic_end = 16
+    elif stride_header.StrideLength == 16:
+        return []
+    else:
+        print(stride_header.StrideLength)
+        num = None
     coords = []
     for hex_data in hex_data_split:
-        if b_20:
-            hex_data = hex_data[:12]
         coord = []
-        for j in range(3):
-            selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
-            exp_bitdepth = 0
-            mantissa_bitdepth = 15
-            bias = 2 ** (exp_bitdepth - 1) - 1
-            mantissa_division = 2 ** mantissa_bitdepth
-            int_fs = int(selection, 16)
-            mantissa = int_fs & 2 ** mantissa_bitdepth - 1
-            mantissa_abs = mantissa / mantissa_division
-            exponent = (int_fs >> mantissa_bitdepth) & 2 ** exp_bitdepth - 1
-            negative = int_fs >> 15
-            if exponent == 0:
-                flt = mantissa_abs * 2 ** (bias - 1)
-            else:
-                print('Incorrect file given.')
-                return
+        for j in range(num):
+            flt, negative = get_float16(hex_data, j)
             if negative:
-                flt += -0.35
+                magic, magic_negative = get_float16(hex_data[magic_start:magic_end], 0)
+                flt -= (-1)**magic_negative * magic
+
+                # flt -= 0.35
             coord.append(flt)
         coords.append(coord)
     return coords
@@ -356,17 +391,42 @@ def trim_verts_data(verts_data, faces_data):
 
 
 def get_obj_str(faces_data, verts_data):
+    vns = []
+    vts = []
     verts_str = ''
     for coord in verts_data:
+        # if coord[-1] == 0.3535:
+        #     coord = [round(x*(1/0.3535), 4) for x in coord]
         verts_str += f'v {coord[0]} {coord[1]} {coord[2]}\n'
+        # print(coord)
+        if len(coord) > 3:
+            vts.append(coord[3:6])
+            vns.append(coord[6:9])
+            # vts.append(coord)
+            # vns.append(coord)
+    for coord in vts:
+        if coord:
+            verts_str += f'vt {coord[0]} {coord[1]}\n'
+        # verts_str += f'vt {coord[3:]}\n'
+        # verts_str += f'vt \n'
+    for coord in vns:
+        if coord:
+            verts_str += f'vn {coord[0]} {coord[1]} {coord[2]}\n'
+        # print(coord)
+        # print(np.sqrt(coord[5][0]**2 + coord[6][0]**2 + coord[7][0]**2))
+        # verts_str += f'vn {coord[3:]}\n'
     faces_str = ''
     for face in faces_data:
-        faces_str += f'f {face[0]}// {face[1]}// {face[2]}//\n'
+        faces_str += f'f {face[0]}/{face[0]}/{face[0]} {face[1]}/{face[1]}/{face[1]} {face[2]}/{face[2]}/{face[2]}\n'
     return verts_str + faces_str  # for sep remove , replace with +
 
 
 def write_obj(obj_strings, hsh):
-    with open(f'C:/d2_model_temp/texture_models/{hsh}.obj', 'w') as f:
+    try:
+        os.mkdir(f'C:/d2_model_temp/texture_models/{hsh[:8]}/')
+    except FileExistsError:
+        pass
+    with open(f'C:/d2_model_temp/texture_models/{hsh[:8]}/{hsh}.obj', 'w') as f:
         for string in obj_strings:
             f.write(string)
     print('Written to file.')
@@ -380,5 +440,6 @@ if __name__ == '__main__':
     - read entries from the data file
     - mess around until you find the answer
     """
-    #7C23ED80
-    get_model('CCC7F380')
+    # CCC7F380
+    # E73AED80
+    get_model('86BFFE80')

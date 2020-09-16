@@ -45,7 +45,7 @@ def get_header(file_hex, header):
     return header
 
 
-def unpack_map(main_file, folder_name='Other', version='2_9_0_1'):
+def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_0_1'):
     # If the file is too large you can uncomment the LARGE stuff
     scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file, version)
 
@@ -61,7 +61,7 @@ def unpack_map(main_file, folder_name='Other', version='2_9_0_1'):
     #         write_obj_strings(obj_strings, folder_name, main_file, i)  # LARGE
     # else:
     #     return  # LARGE
-    obj_strings = get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers)
+    obj_strings = get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers, all_file_info)
     write_obj_strings(obj_strings, folder_name, main_file)
 
 
@@ -218,7 +218,7 @@ def get_transforms_array(model_refs, copy_counts, rotations, scales):
     return transforms_array
 
 
-def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers):
+def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers, all_file_info):
     obj_strings = []
     max_vert_used = 0
     nums = 0
@@ -235,7 +235,7 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
         #     return obj_strings
         model_file = model_unpacker.get_file_from_hash(get_flipped_hex(transform_array[0], 8))
         model_data_file = model_unpacker.get_model_data_file(model_file)
-        submeshes_verts, submeshes_faces = model_unpacker.get_verts_faces_data(model_data_file, version)
+        submeshes_verts, submeshes_faces = model_unpacker.get_verts_faces_data(model_data_file, all_file_info)
         if not submeshes_verts or not submeshes_faces:
             print('Skipping current model')
             continue
@@ -324,12 +324,14 @@ def unpack_folder(pkg_name, version):
     entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG') if y == '0x0004'}
     entries_size = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, FileSizeB')}
     file_names = sorted(entries_refid.keys(), key=lambda x: entries_size[x])
+    all_file_info = {x[0]: dict(zip(['RefID', 'RefPKG', 'FileType'], x[1:])) for x in
+                     pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
     for file_name in file_names:
         if file_name in entries_refpkg.keys():
             if '1A4A' not in file_name:
                 continue
             print(f'Unpacking {file_name}')
-            unpack_map(file_name, folder_name=pkg_name, version=version)
+            unpack_map(file_name,  all_file_info, folder_name=pkg_name, version=version)
 
 
 if __name__ == '__main__':

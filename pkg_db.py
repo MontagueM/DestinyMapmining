@@ -13,7 +13,6 @@ def start_db_connection(version_str):
 
 def get_entries_from_table(pkg_str, column_select='*'):
     global c
-    c.execute("SELECT " + column_select + " from " + pkg_str + "_DecodedData")
+    c.execute(f'SELECT {column_select} from {pkg_str}')
     rows = c.fetchall()
     return rows
-
