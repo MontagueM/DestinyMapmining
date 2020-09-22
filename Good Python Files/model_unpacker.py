@@ -4,7 +4,8 @@ from dataclasses import dataclass, fields
 import numpy as np
 import binascii
 import os
-
+# import pyfbx
+import fbx
 version = '2_9_2_0_all'
 
 
@@ -363,6 +364,10 @@ def get_obj_str(faces_data, verts_data):
     for face in faces_data:
         faces_str += f'f {face[0]}// {face[1]}// {face[2]}//\n'
     return verts_str + faces_str  # for sep remove , replace with +
+
+
+def export_fbx(faces_data, verts_data):
+    manager = pyfbx.Manager()
 
 
 def write_obj(obj_strings, hsh):

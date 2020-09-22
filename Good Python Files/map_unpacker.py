@@ -328,12 +328,12 @@ def unpack_folder(pkg_name, version):
                      pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
     for file_name in file_names:
         if file_name in entries_refpkg.keys():
-            if '1A4A' not in file_name:
-                continue
+            # if '1A4A' not in file_name:
+            #     continue
             print(f'Unpacking {file_name}')
             unpack_map(file_name,  all_file_info, folder_name=pkg_name, version=version)
 
 
 if __name__ == '__main__':
     # unpack_map('0369-00000B77')
-    unpack_folder('city_tower_d2_0369', '2_9_2_0_all')
+    unpack_folder('pvp_vex_tube_0372', '2_9_2_0_all')

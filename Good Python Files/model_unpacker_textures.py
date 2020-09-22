@@ -192,9 +192,9 @@ def get_verts_faces_data(model_data_file,version):
         faces_data = get_faces_data(faces_file)
         if not verts_8_file:
             return None, None
-        verts_8_data = get_verts_data(verts_8_file)
+        verts_8_data = get_verts_data(verts_8_file, b_uv=False)
         # Even though this may be None it should be okay.
-        verts_20_data = get_verts_data(verts_20_file)
+        verts_20_data = get_verts_data(verts_20_file, b_uv=True)
         if not verts_8_data or not verts_8_data:
             return None, None
         if not faces_data or not faces_data:
@@ -332,7 +332,7 @@ def get_float16(hex_data, j):
     return flt, negative
 
 
-def get_verts_data(verts_file):
+def get_verts_data(verts_file, b_uv):
     pkg_name = get_pkg_name(verts_file)
     if not pkg_name:
         return None
@@ -374,8 +374,16 @@ def get_verts_data(verts_file):
             flt, negative = get_float16(hex_data, j)
             if negative:
                 magic, magic_negative = get_float16(hex_data[magic_start:magic_end], 0)
-                flt -= (-1)**magic_negative * magic
-
+                # if magic != 1.0789593218788873e-05 and j == 1:
+                #     flt += 0.1
+                if b_uv:
+                    # if j == 1:
+                    #     flt *= -1
+                    flt -= (-1)**magic_negative * magic
+                    # flt *= 10
+                else:
+                    flt -= (-1) ** magic_negative * magic
+                # print(magic)
                 # flt -= 0.35
             coord.append(flt)
         coords.append(coord)
@@ -442,4 +450,6 @@ if __name__ == '__main__':
     """
     # CCC7F380
     # E73AED80
-    get_model('86BFFE80')
+    # 86BFFE80
+    # 0A34ED80
+    get_model('E73AED80')
