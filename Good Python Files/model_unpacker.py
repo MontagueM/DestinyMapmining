@@ -6,7 +6,9 @@ import binascii
 import os
 # import pyfbx
 import fbx
-version = '2_9_2_0_all'
+import pyfbx_jo as pfb
+
+version = '2_9_2_1_all'
 
 
 @dataclass
@@ -144,9 +146,11 @@ def get_model(model_file_hash):
             obj_strings.append(obj_str)  # separated obj
             # all_verts_str += verts_str  # joined obj
             # all_faces_str += faces_str  # joined obj
+            write_fbx(adjusted_faces_data, submeshes_verts[index_2][index_3], model_file_hash, f'{model_file_hash}_0_{index_2}_{index_3}')
 
     # obj_strings = f'o {model_file_hash}\n' + all_verts_str + all_faces_str  # joined obj
     write_obj(obj_strings, model_file_hash)
+
 
 
 def adjust_faces_data(faces_data, max_vert_used):
@@ -366,8 +370,33 @@ def get_obj_str(faces_data, verts_data):
     return verts_str + faces_str  # for sep remove , replace with +
 
 
-def export_fbx(faces_data, verts_data):
-    manager = pyfbx.Manager()
+def write_fbx(faces_data, verts_data, folder_name, name):
+    controlpoints = [fbx.FbxVector4(x[0], x[1], x[2]) for x in verts_data]
+    # manager = Manager()
+    # manager.create_scene(name)
+    fb = pfb.FBox()
+    fb.create_node()
+
+    mesh = fbx.FbxMesh.Create(fb.scene, name)
+
+    # for vert in verts_data:
+        # fb.create_mesh_controlpoint(vert[0], vert[1], vert[2])
+    controlpoint_count = len(controlpoints)
+    mesh.InitControlPoints(controlpoint_count)
+    for i, p in enumerate(controlpoints):
+        mesh.SetControlPointAt(p, i)
+    for face in faces_data:
+        mesh.BeginPolygon()
+        mesh.AddPolygon(face[0]-1)
+        mesh.AddPolygon(face[1]-1)
+        mesh.AddPolygon(face[2]-1)
+        mesh.EndPolygon()
+
+    node = fbx.FbxNode.Create(fb.scene, '')
+    node.SetNodeAttribute(mesh)
+    fb.scene.GetRootNode().AddChild(node)
+
+    fb.export(save_path=f'C:/d2_model_temp/texture_models/{name}.fbx')
 
 
 def write_obj(obj_strings, hsh):
@@ -386,4 +415,4 @@ if __name__ == '__main__':
     - mess around until you find the answer
     """
     #7C23ED80
-    get_model('CCC7F380')
+    get_model('B901C780')

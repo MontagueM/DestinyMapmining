@@ -4,8 +4,10 @@ from dataclasses import dataclass, fields
 import numpy as np
 import binascii
 import os
+import fbx
+import pyfbx_jo as pfb
 
-version = '2_9_2_0_all'
+version = '2_9_2_1_all'
 
 
 @dataclass
@@ -143,6 +145,7 @@ def get_model(model_file_hash):
             obj_strings.append(obj_str)  # separated obj
             # all_verts_str += verts_str  # joined obj
             # all_faces_str += faces_str  # joined obj
+            write_fbx(shifted_faces, submeshes_verts[index_2][index_3], f'{model_file_hash}_0_{index_2}_{index_3}')
             write_obj(obj_str, f'{model_file_hash}_0_{index_2}_{index_3}')
     # obj_strings = f'o {model_file_hash}\n' + all_verts_str + all_faces_str  # joined obj
     # write_obj(obj_strings, model_file_hash)
@@ -429,6 +432,38 @@ def get_obj_str(faces_data, verts_data):
     return verts_str + faces_str  # for sep remove , replace with +
 
 
+def write_fbx(faces_data, verts_data, name):
+    controlpoints = [fbx.FbxVector4(x[0], x[1], x[2]) for x in verts_data]
+    # manager = Manager()
+    # manager.create_scene(name)
+    fb = pfb.FBox()
+    fb.create_node()
+
+    mesh = fbx.FbxMesh.Create(fb.scene, name)
+
+    # for vert in verts_data:
+        # fb.create_mesh_controlpoint(vert[0], vert[1], vert[2])
+    controlpoint_count = len(controlpoints)
+    mesh.InitControlPoints(controlpoint_count)
+    for i, p in enumerate(controlpoints):
+        mesh.SetControlPointAt(p, i)
+    for face in faces_data:
+        mesh.BeginPolygon()
+        mesh.AddPolygon(face[0]-1)
+        mesh.AddPolygon(face[1]-1)
+        mesh.AddPolygon(face[2]-1)
+        mesh.EndPolygon()
+
+    node = fbx.FbxNode.Create(fb.scene, '')
+    node.SetNodeAttribute(mesh)
+    fb.scene.GetRootNode().AddChild(node)
+    try:
+        os.mkdir(f'C:/d2_model_temp/texture_models/{name[:8]}/')
+    except:
+        pass
+    fb.export(save_path=f'C:/d2_model_temp/texture_models/{name[:8]}/{name}.fbx')
+
+
 def write_obj(obj_strings, hsh):
     try:
         os.mkdir(f'C:/d2_model_temp/texture_models/{hsh[:8]}/')
@@ -452,4 +487,4 @@ if __name__ == '__main__':
     # E73AED80
     # 86BFFE80
     # 0A34ED80
-    get_model('E73AED80')
+    get_model('B901C780')

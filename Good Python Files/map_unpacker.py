@@ -6,6 +6,8 @@ import scipy.spatial
 import pkg_db
 import copy
 import os
+import fbx
+import pyfbx_jo as pfb
 
 
 @dataclass
@@ -47,6 +49,10 @@ def get_header(file_hex, header):
 
 def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_0_1'):
     # If the file is too large you can uncomment the LARGE stuff
+
+    fbx_map = pfb.FBox()
+    fbx_map.create_node()
+
     scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file, version)
 
     rotations, scales, scale_coords_extra, modifiers = get_transform_data(transform_hex, scale_hex)
@@ -61,8 +67,10 @@ def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_0_1')
     #         write_obj_strings(obj_strings, folder_name, main_file, i)  # LARGE
     # else:
     #     return  # LARGE
-    obj_strings = get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers, all_file_info)
-    write_obj_strings(obj_strings, folder_name, main_file)
+
+    obj_strings, fbx_map = get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers, all_file_info, fbx_map)
+    write_fbx(fbx_map, folder_name, main_file)
+    # write_obj_strings(obj_strings, folder_name, main_file)
 
 
 def get_hex_from_pkg(file, version):
@@ -218,13 +226,14 @@ def get_transforms_array(model_refs, copy_counts, rotations, scales):
     return transforms_array
 
 
-def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers, all_file_info):
+def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers, all_file_info, fbx_map):
     obj_strings = []
     max_vert_used = 0
     nums = 0
-
+    fbx_count_debug = 0
     all_verts_str = ''
     all_faces_str = ''
+
 
     for i, transform_array in enumerate(transforms_array):
         # if i > 440:
@@ -261,9 +270,44 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
                     # all_verts_str += verts_str
                     # all_faces_str += faces_str
                     obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str  # for sep
+                    shifted_faces = shift_faces_down(adjusted_faces_data)
+                    fbx_map = add_model_to_fbx_map(fbx_map, shifted_faces, new_verts, f'{transform_array[0]}_{copy_id}_{index_2}_{index_3}')
                     obj_strings.append(obj_str)  # for sep
     # obj_strings = f'o obj\n' + all_verts_str + all_faces_str
-    return obj_strings
+    return obj_strings, fbx_map
+
+
+def shift_faces_down(faces_data):
+    a_min = faces_data[0][0]
+    for f in faces_data:
+        for i in f:
+            if i < a_min:
+                a_min = i
+    for i, f in enumerate(faces_data):
+        for j, x in enumerate(f):
+            faces_data[i][j] -= a_min - 1
+    return faces_data
+
+
+def add_model_to_fbx_map(fbx_map, faces_data, verts_data, name):
+    mesh = fbx.FbxMesh.Create(fbx_map.scene, name)
+    controlpoints = [fbx.FbxVector4(x[0], x[1], x[2]) for x in verts_data]
+    controlpoint_count = len(controlpoints)
+    mesh.InitControlPoints(controlpoint_count)
+    for i, p in enumerate(controlpoints):
+        mesh.SetControlPointAt(p, i)
+    for face in faces_data:
+        mesh.BeginPolygon()
+        mesh.AddPolygon(face[0]-1)
+        mesh.AddPolygon(face[1]-1)
+        mesh.AddPolygon(face[2]-1)
+        mesh.EndPolygon()
+
+    node = fbx.FbxNode.Create(fbx_map.scene, name)
+    node.SetNodeAttribute(mesh)
+    fbx_map.scene.GetRootNode().AddChild(node)
+
+    return fbx_map
 
 
 def set_vert_locations(verts, scale_info):
@@ -317,6 +361,13 @@ def write_obj_strings(obj_strings, folder_name, file_name, i=None):
         print(f'Written to C:/d2_maps/{folder_name}/{file_name}.obj')
 
 
+def write_fbx(fbx_map, folder_name, file_name):
+    try:
+        os.mkdir(f'C:/d2_maps/{folder_name}_fbx/')
+    except FileExistsError:
+        pass
+    fbx_map.export(save_path=f'C:/d2_maps/{folder_name}_fbx/{file_name}.fbx')
+
 
 def unpack_folder(pkg_name, version):
     pkg_db.start_db_connection(version)
@@ -328,12 +379,12 @@ def unpack_folder(pkg_name, version):
                      pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
     for file_name in file_names:
         if file_name in entries_refpkg.keys():
-            # if '1A4A' not in file_name:
-            #     continue
+            if '1A4A' not in file_name:
+                continue
             print(f'Unpacking {file_name}')
             unpack_map(file_name,  all_file_info, folder_name=pkg_name, version=version)
 
 
 if __name__ == '__main__':
     # unpack_map('0369-00000B77')
-    unpack_folder('pvp_vex_tube_0372', '2_9_2_0_all')
+    unpack_folder('city_tower_d2_0369', '2_9_2_0_all')
