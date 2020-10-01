@@ -20,6 +20,7 @@ def get_flipped_hex(h, length):
 
 
 def get_file_from_hash(hsh):
+    hsh = get_flipped_hex(hsh, 8)
     first_int = int(hsh.upper(), 16)
     one = first_int - 2155872256
     first_hex = hex(int(np.floor(one/8192)))

@@ -191,6 +191,8 @@ def get_verts_faces_data(model_data_file, all_file_info):
             return None, None
         if not faces_data or faces_data == []:
             return None, None
+        if not verts_20_data or verts_20_data == []:
+            print('20 verts not available, not a problem.')
         all_faces_data.append(faces_data)
         all_verts_8_data.append(verts_8_data)
         all_verts_20_data.append(verts_20_data)
@@ -415,4 +417,4 @@ if __name__ == '__main__':
     - mess around until you find the answer
     """
     #7C23ED80
-    get_model('B901C780')
+    get_model('F9F1B980')

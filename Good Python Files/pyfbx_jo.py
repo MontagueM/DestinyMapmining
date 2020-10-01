@@ -79,14 +79,33 @@ class FBox:
             sys.exit(0)
 
         FBox.ios = fbx.FbxIOSettings.Create(FBox.manager, fbx.IOSROOT)
+        FBox.importer = fbx.FbxImporter.Create(FBox.manager, '')
         FBox.exporter = fbx.FbxExporter.Create(FBox.manager, '')
         FBox.scene = fbx.FbxScene.Create(FBox.manager, '')
         FBox.root_node = FBox.scene.GetRootNode()
 
-    def export(self, file_format='fbx', save_path=None):
+    def import_file(self, import_path=None, ascii_format=False):
+        if not FBox.manager.GetIOSettings():
+            FBox.ios = fbx.FbxIOSettings.Create(FBox.manager, fbx.IOSROOT)
+            FBox.manager.SetIOSettings(FBox.ios)
+        if ascii_format:
+            b_ascii = 1
+        else:
+            b_ascii = -1
+        importstat = FBox.importer.Initialize(import_path, b_ascii, FBox.manager.GetIOSettings())
+
+        if not importstat:
+            try:
+                raise IOError("Problem importing file!")
+            except IOError as e:
+                print("An exception flew by!")
+
+        importstat = FBox.importer.Import(FBox.scene)
+
+        FBox.importer.Destroy()
+
+    def export(self, save_path=None, ascii_format=False):
         """Export the scene to an fbx file."""
-        if not save_path:
-            save_path = "./marker." + file_format
 
         if not FBox.manager.GetIOSettings():
             FBox.ios = fbx.FbxIOSettings.Create(FBox.manager, fbx.IOSROOT)
@@ -96,11 +115,14 @@ class FBox:
         FBox.manager.GetIOSettings().SetBoolProp(fbx.EXP_FBX_TEXTURE, True)
         FBox.manager.GetIOSettings().SetBoolProp(fbx.EXP_FBX_EMBEDDED, True)
         FBox.manager.GetIOSettings().SetBoolProp(fbx.EXP_FBX_SHAPE, True)
-        FBox.manager.GetIOSettings().SetBoolProp(fbx.EXP_FBX_GOBO, True)
-        FBox.manager.GetIOSettings().SetBoolProp(fbx.EXP_FBX_ANIMATION, True)
+        FBox.manager.GetIOSettings().SetBoolProp(fbx.EXP_FBX_GOBO, False)
+        FBox.manager.GetIOSettings().SetBoolProp(fbx.EXP_FBX_ANIMATION, False)
         FBox.manager.GetIOSettings().SetBoolProp(fbx.EXP_FBX_GLOBAL_SETTINGS, True)
-        print(save_path)
-        exportstat = FBox.exporter.Initialize(save_path, 1, FBox.manager.GetIOSettings())
+        if ascii_format:
+            b_ascii = 1
+        else:
+            b_ascii = -1
+        exportstat = FBox.exporter.Initialize(save_path, b_ascii, FBox.manager.GetIOSettings())
 
         if not exportstat:
             try:

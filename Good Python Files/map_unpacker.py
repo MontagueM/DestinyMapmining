@@ -1,13 +1,14 @@
 from dataclasses import dataclass, fields
 import numpy as np
 import struct
-import model_unpacker
+import model_unpacker_textures as mut
 import scipy.spatial
 import pkg_db
 import copy
 import os
 import fbx
 import pyfbx_jo as pfb
+import gf
 
 
 @dataclass
@@ -47,7 +48,7 @@ def get_header(file_hex, header):
     return header
 
 
-def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_0_1'):
+def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_2_1_all'):
     # If the file is too large you can uncomment the LARGE stuff
 
     fbx_map = pfb.FBox()
@@ -57,6 +58,7 @@ def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_0_1')
 
     rotations, scales, scale_coords_extra, modifiers = get_transform_data(transform_hex, scale_hex)
     model_refs = get_model_refs(model_refs_hex)
+    print(len(model_refs), len(rotations))
     copy_counts = get_copy_counts(copy_count_hex)
     transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales)
     # if main_file == '0932-000001FE':  # LARGE
@@ -76,10 +78,10 @@ def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_0_1')
 def get_hex_from_pkg(file, version):
     pkgs_dir = 'C:/d2_output/'
 
-    main_pkg = model_unpacker.get_pkg_name(file)
+    main_pkg = gf.get_pkg_name(file)
     main_hex = get_hex_data(f'{pkgs_dir}{main_pkg}/{file}.bin')
     scales_file = get_scales_file(main_hex)
-    scales_pkg = model_unpacker.get_pkg_name(scales_file)
+    scales_pkg = gf.get_pkg_name(scales_file)
     scale_hex = get_hex_data(f'{pkgs_dir}{scales_pkg}/{scales_file}.bin')[48 * 2:]
 
     transform_count = int(get_flipped_hex(main_hex[64*2:64*2+4], 4), 16)
@@ -100,27 +102,8 @@ def get_hex_from_pkg(file, version):
 
 def get_scales_file(main_hex):
     file_hash = main_hex[24*2:24*2+8]
-    file_name = model_unpacker.get_file_from_hash(get_flipped_hex(file_hash, 8))
+    file_name = gf.get_file_from_hash(file_hash)
     return file_name
-
-
-def get_float16(hex_data, j):
-    selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
-    mantissa_bitdepth = 15
-    exp_bitdepth = 15 - mantissa_bitdepth
-    bias = 2 ** (exp_bitdepth - 1) - 1
-    mantissa_division = 2 ** mantissa_bitdepth
-    int_fs = int(selection, 16)
-    mantissa = int_fs & 2 ** mantissa_bitdepth - 1
-    mantissa_abs = mantissa / mantissa_division
-    exponent = (int_fs >> mantissa_bitdepth) & 2 ** exp_bitdepth - 1
-    negative = int_fs >> mantissa_bitdepth
-    if exponent == 0:
-        flt = mantissa_abs * 2 ** (bias - 1)
-    else:
-        print('Incorrect file given.')
-        return
-    return flt, negative
 
 
 def get_transform_data(transform_hex, scale_hex):
@@ -242,9 +225,9 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
         #     continue
         # if i > 0:
         #     return obj_strings
-        model_file = model_unpacker.get_file_from_hash(get_flipped_hex(transform_array[0], 8))
-        model_data_file = model_unpacker.get_model_data_file(model_file)
-        submeshes_verts, submeshes_faces = model_unpacker.get_verts_faces_data(model_data_file, all_file_info)
+        model_file = gf.get_file_from_hash(transform_array[0])
+        model_data_file = mut.get_model_data_file(model_file)
+        submeshes_verts, submeshes_faces = mut.get_verts_faces_data(model_data_file, all_file_info)
         if not submeshes_verts or not submeshes_faces:
             print('Skipping current model')
             continue
@@ -263,10 +246,10 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
                 for index_3 in range(len(submeshes_verts[index_2])):
                     new_verts = loc_verts[offset:offset + len(submeshes_verts[index_2][index_3])]
                     offset += len(submeshes_verts[index_2][index_3])
-                    adjusted_faces_data, max_vert_used = model_unpacker.adjust_faces_data(submeshes_faces[index_2][index_3],
+                    adjusted_faces_data, max_vert_used = mut.adjust_faces_data(submeshes_faces[index_2][index_3],
                                                                                           max_vert_used)
-                    obj_str = model_unpacker.get_obj_str(adjusted_faces_data, new_verts) # for sep
-                    # obj_str = model_unpacker.get_obj_str(submeshes_faces[index_2][index_3], new_verts)
+                    obj_str = mut.get_obj_str(adjusted_faces_data, new_verts) # for sep
+                    # obj_str = mut.get_obj_str(submeshes_faces[index_2][index_3], new_verts)
                     # all_verts_str += verts_str
                     # all_faces_str += faces_str
                     obj_str = f'o {transform_array[0]}_{copy_id}_{index_2}_{index_3}\n' + obj_str  # for sep
@@ -366,7 +349,8 @@ def write_fbx(fbx_map, folder_name, file_name):
         os.mkdir(f'C:/d2_maps/{folder_name}_fbx/')
     except FileExistsError:
         pass
-    fbx_map.export(save_path=f'C:/d2_maps/{folder_name}_fbx/{file_name}.fbx')
+    fbx_map.export(save_path=f'C:/d2_maps/{folder_name}_fbx/{file_name}.fbx', ascii_format=False)
+    print('Wrote fbx')
 
 
 def unpack_folder(pkg_name, version):
@@ -379,7 +363,7 @@ def unpack_folder(pkg_name, version):
                      pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
     for file_name in file_names:
         if file_name in entries_refpkg.keys():
-            if '1A4A' not in file_name:
+            if 'B3F' not in file_name:
                 continue
             print(f'Unpacking {file_name}')
             unpack_map(file_name,  all_file_info, folder_name=pkg_name, version=version)
@@ -387,4 +371,4 @@ def unpack_folder(pkg_name, version):
 
 if __name__ == '__main__':
     # unpack_map('0369-00000B77')
-    unpack_folder('city_tower_d2_0369', '2_9_2_0_all')
+    unpack_folder('city_tower_d2_0369', '2_9_2_1_all')
