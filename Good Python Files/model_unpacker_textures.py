@@ -70,24 +70,6 @@ def get_header(file_hex, header):
 test_dir = 'C:/d2_output/'
 
 
-# def get_referenced_file(file):
-#     pkg_name = file.pkg_name
-#     if not pkg_name:
-#         return None, None, None
-#     entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG')}
-#     entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID')}
-#     if file.name not in entries_refpkg.keys():
-#         return None, None, None
-#     ref_pkg_id = entries_refpkg[file.name][2:]
-#     ref_pkg_name = gf.get_pkg_name(f'{ref_pkg_id}-')
-#     if not ref_pkg_name:
-#         return None, None, None
-#     entries_filetype = {x: y for x, y in pkg_db.get_entries_from_table(ref_pkg_name, 'FileName, FileType')}
-#
-#     ref_file_name = f'{ref_pkg_id}-' + entries_refid[file.name][2:]
-#     return ref_pkg_name, ref_file_name, entries_filetype[ref_file_name]
-
-
 def get_model(model_file_hash, all_file_info, ginsor_debug=False):
     print(model_file_hash)
     pkg_db.start_db_connection()
@@ -97,14 +79,11 @@ def get_model(model_file_hash, all_file_info, ginsor_debug=False):
     submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file, all_file_info, model_file)
     obj_strings = []
     max_vert_used = 0
-    # all_verts_str = ''  # joined obj
-    # all_faces_str = ''  # joined obj
     for index_2 in range(len(submeshes_verts.keys())):
         for index_3 in range(len(submeshes_verts[index_2])):
             adjusted_faces_data, max_vert_used = adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
             obj_str = f'o {model_file_hash}_0_{index_2}_{index_3}\n'  # separated obj
             shifted_faces = shift_faces_down(adjusted_faces_data)
-            # scaled_verts = scale_verts(submeshes_verts[index_2][index_3], model_file)
             obj_str += get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3], ginsor_debug)  # replace with obj_str = for separated obj, otherwise verts_str, faces_str = for joined obj
             obj_strings.append(obj_str)  # separated obj
             # all_verts_str += verts_str  # joined obj
@@ -199,81 +178,22 @@ def get_verts_faces_data(model_data_file, all_file_info, model_file):
 
 
 def scale_verts(verts_data, model_file):
-    """
-    HAVE NOT TRIED YET
-    TRY IT
-    HUGE POSSIBILITY
-    It's possible when Ginsor said 0x6C and MasterScaleHash its because its just for all axes!
-    So multiply but that for all axes, DON'T bother will sep axes out.
-    TRY doing that scale * 2 as well, might be correct.
-    """
-    # return verts_data
-    # Idk why this is the case but I think this is it. Meant to be 0x6C but wrong? idk
     pkg_name = gf.get_pkg_name(model_file)
     model_hex = gf.get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
-    # model_scale = [struct.unpack('f', bytes.fromhex(model_hex[j:j + 8]))[0] for j in [224, 232, 248]]
-    # model_scale = [struct.unpack('f', bytes.fromhex(model_hex[j:j + 8]))[0] for j in range(0x6C*2, (0x6C+12)*2, 8)]
-    model_scale = [struct.unpack('f', bytes.fromhex(model_hex[0x6C*2:0x6C*2 + 8]))[0]]*3
-    # model_scale = [2, 2, 2]
-    test = struct.unpack('f', bytes.fromhex(model_hex[0x70*2:0x70*2 + 8]))[0]
-    # print(model_scale)
+    model_scale = struct.unpack('f', bytes.fromhex(model_hex[0x6C*2:0x6C*2 + 8]))[0]
     for i in range(len(verts_data)):
         for j in range(3):
-            verts_data[i][j] *= model_scale[j] * 2
-
-    return verts_data, model_scale[0]
+            verts_data[i][j] *= model_scale
+    return verts_data, model_scale
 
 
 def reposition_verts(verts_data, scale, model_file):
-    """
-    This method needs to work by finding the minimum and making that the origin.
-    However, it seems like either 1. my rotation is broken or 2. need to rotate in reposition
-    """
-    # 1: Set min to origin. Not actually correct but prob wrong anyway.
-    def min_to_origin():
-        sep = [[x[i] for x in verts_data] for i in range(3)]
-        for i in range(3):
-            minm = np.min(sep[i])
-            for j in range(len(verts_data)):
-                verts_data[j][i] -= minm
-
-    # 2: Set median to origin
-    def avg_to_origin():
-        sep = [[x[i] for x in verts_data] for i in range(3)]
-        for i in range(3):
-            avg = np.mean(sep[i])
-            for j in range(len(verts_data)):
-                verts_data[j][i] -= avg
-
-    def floor_z_avg_xy_origin():
-        sep = [[x[i] for x in verts_data] for i in range(3)]
-        avgs = []
-        for i in range(3):
-            # if i == 2:
-            #     zmin = min(sep[i])
-            #     for j in range(len(verts_data)):
-            #         verts_data[j][i] -= zmin
-            # else:
-            avg = (max(sep[i])-min(sep[i]))/2 + min(sep[i])
-            # avg = np.median(list(set(sep[i])))
-            # avg = np.median(sep[i])
-            avgs.append(avg)
-            for j in range(len(verts_data)):
-                verts_data[j][i] -= avg
-        print(f'Calculated avg as {avgs}')
-
-    def move_by_scale():
-        pkg_name = gf.get_pkg_name(model_file)
-        model_hex = gf.get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
-        oneninetwo = [struct.unpack('f', bytes.fromhex(model_hex[192+8*i:192 +8*(i+1)]))[0] for i in range(3)]
-        for i in range(3):
-            for j in range(len(verts_data)):
-                verts_data[j][i] -= (scale-oneninetwo[i])
-
-    # avg_to_origin()
-    # min_to_origin()
-    # floor_z_avg_xy_origin()
-    move_by_scale()
+    pkg_name = gf.get_pkg_name(model_file)
+    model_hex = gf.get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
+    oneninetwo = [struct.unpack('f', bytes.fromhex(model_hex[192 + 8 * i:192 + 8 * (i + 1)]))[0] for i in range(3)]
+    for i in range(3):
+        for j in range(len(verts_data)):
+            verts_data[j][i] -= (scale - oneninetwo[i])
 
     return verts_data
 
@@ -390,7 +310,7 @@ def get_float16(hex_data, j, is_uv=False):
     flt = get_signed_int(gf.get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4), 16)
     if j == 1 and is_uv:
         flt *= -1
-    flt = (1 + flt / (2 ** 15 - 1)) * 2 ** (-1)
+    flt = (1 + flt / (2 ** 15 - 1))
     return flt
 
 
@@ -674,13 +594,5 @@ if __name__ == '__main__':
     pkg_db.start_db_connection()
     all_file_info = {x[0]: dict(zip(['RefID', 'RefPKG', 'FileType'], x[1:])) for x in
                      pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
-    # CCC7F380
-    # E73AED80
-    # 86BFFE80
-    # 0A34ED80
-    # A4BFFE80
-    # 3D56FC80
 
-    # 4B24ED80
-    get_model('0A34ED80', all_file_info, ginsor_debug=True)
-    import get_model_textures as gmt
+    get_model('B6D4F680', all_file_info, ginsor_debug=False)
