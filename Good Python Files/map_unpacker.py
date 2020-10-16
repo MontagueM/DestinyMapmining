@@ -254,7 +254,7 @@ def get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug
             ############### TODO 1 AND 2
             if transform['child_flag'] == 1:
                 print('Is child, skipping.')
-                continue
+                # continue
             # TODO NOTE THERE ARE 6 VERTS PACKED AS IT IS POSX,POSY,POSZ,UV1,UV2,UV3???
             all_index_2_verts = []
             [[[all_index_2_verts.append(z) for z in y] for y in x] for x in submeshes_verts.values()]
@@ -265,7 +265,7 @@ def get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug
             # TODO this deletes uv verts
             ############### TODO 3
             r_verts_data = rotate_verts(all_index_2_verts, transform['rotation'])
-            loc_rot = rotate_verts(transform['location'], transform['rotation'])
+            # loc_rot = rotate_verts(transform['location'], transform['rotation'])
             # transform['map_scaler'] = rotate_verts(transform['map_scaler'], transform['rotation'])
             # print(r_verts_data[:3], r_verts_data[4], r_verts_data[10])
             # transform[4] = rotate_verts(transform[4], transform[0])
@@ -325,6 +325,7 @@ def get_map_scaled_verts(verts_data, map_scaler):
 
 def get_map_moved_verts(verts_data, location):
     # location = [-location[0], location[2], location[1]]
+    print(location)
     for i in range(len(verts_data)):
         for j in range(3):
             verts_data[i][j] += location[j]
@@ -413,7 +414,7 @@ def unpack_folder(pkg_name, ginsor_debug=False):
                      pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
     for file_name in file_names:
         if file_name in entries_refpkg.keys():
-            if '0B3F' not in file_name:
+            if '1A4A' not in file_name:
                 continue
             print(f'Unpacking {file_name}')
             unpack_map(file_name,  all_file_info, ginsor_debug, folder_name=pkg_name)

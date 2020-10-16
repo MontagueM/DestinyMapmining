@@ -113,7 +113,8 @@ def get_model(model_file_hash, all_file_info, ginsor_debug=False):
             write_obj(obj_str, f'{model_file_hash}_0_{index_2}_{index_3}')
     # obj_strings = f'o {model_file_hash}\n' + all_verts_str + all_faces_str  # joined obj
     write_obj(obj_strings, model_file_hash)
-    extract_textures(model_file_hash)
+    if __name__ == '__main__':
+        extract_textures(model_file_hash)
 
 
 def shift_faces_down(faces_data):
@@ -171,7 +172,7 @@ def get_verts_faces_data(model_data_file, all_file_info, model_file):
             return None, None
         all_faces_data.append(faces_data)
         scaled_pos_verts_data, model_scale = scale_verts(pos_verts_data, model_file)
-        repositioned_scaled_pos_verts_data = reposition_verts(scaled_pos_verts_data, model_scale)
+        repositioned_scaled_pos_verts_data = reposition_verts(scaled_pos_verts_data, model_scale, model_file)
         all_pos_verts_data.append(repositioned_scaled_pos_verts_data)
         # verts_data = verts_8_data + verts_20_data
         if uv_verts_data:
@@ -215,7 +216,7 @@ def scale_verts(verts_data, model_file):
     model_scale = [struct.unpack('f', bytes.fromhex(model_hex[0x6C*2:0x6C*2 + 8]))[0]]*3
     # model_scale = [2, 2, 2]
     test = struct.unpack('f', bytes.fromhex(model_hex[0x70*2:0x70*2 + 8]))[0]
-    print(model_scale)
+    # print(model_scale)
     for i in range(len(verts_data)):
         for j in range(3):
             verts_data[i][j] *= model_scale[j] * 2
@@ -223,7 +224,7 @@ def scale_verts(verts_data, model_file):
     return verts_data, model_scale[0]
 
 
-def reposition_verts(verts_data, scale):
+def reposition_verts(verts_data, scale, model_file):
     """
     This method needs to work by finding the minimum and making that the origin.
     However, it seems like either 1. my rotation is broken or 2. need to rotate in reposition
@@ -262,9 +263,12 @@ def reposition_verts(verts_data, scale):
         print(f'Calculated avg as {avgs}')
 
     def move_by_scale():
+        pkg_name = gf.get_pkg_name(model_file)
+        model_hex = gf.get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
+        oneninetwo = [struct.unpack('f', bytes.fromhex(model_hex[192+8*i:192 +8*(i+1)]))[0] for i in range(3)]
         for i in range(3):
             for j in range(len(verts_data)):
-                verts_data[j][i] -= scale
+                verts_data[j][i] -= (scale-oneninetwo[i])
 
     # avg_to_origin()
     # min_to_origin()
@@ -678,5 +682,5 @@ if __name__ == '__main__':
     # 3D56FC80
 
     # 4B24ED80
-    get_model('86CFC180', all_file_info, ginsor_debug=False)
+    get_model('0A34ED80', all_file_info, ginsor_debug=True)
     import get_model_textures as gmt
