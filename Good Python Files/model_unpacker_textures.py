@@ -7,6 +7,7 @@ import os
 import fbx
 import pyfbx_jo as pfb
 import gf
+import image_decoder_new as imager
 
 version = '2_9_2_1_all'
 
@@ -69,42 +70,31 @@ def get_header(file_hex, header):
 test_dir = 'C:/d2_output/'
 
 
-def get_referenced_file(file):
-    pkg_name = file.pkg_name
-    if not pkg_name:
-        return None, None, None
-    entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG')}
-    entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID')}
-    if file.name not in entries_refpkg.keys():
-        return None, None, None
-    ref_pkg_id = entries_refpkg[file.name][2:]
-    ref_pkg_name = gf.get_pkg_name(f'{ref_pkg_id}-')
-    if not ref_pkg_name:
-        return None, None, None
-    entries_filetype = {x: y for x, y in pkg_db.get_entries_from_table(ref_pkg_name, 'FileName, FileType')}
+# def get_referenced_file(file):
+#     pkg_name = file.pkg_name
+#     if not pkg_name:
+#         return None, None, None
+#     entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG')}
+#     entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID')}
+#     if file.name not in entries_refpkg.keys():
+#         return None, None, None
+#     ref_pkg_id = entries_refpkg[file.name][2:]
+#     ref_pkg_name = gf.get_pkg_name(f'{ref_pkg_id}-')
+#     if not ref_pkg_name:
+#         return None, None, None
+#     entries_filetype = {x: y for x, y in pkg_db.get_entries_from_table(ref_pkg_name, 'FileName, FileType')}
+#
+#     ref_file_name = f'{ref_pkg_id}-' + entries_refid[file.name][2:]
+#     return ref_pkg_name, ref_file_name, entries_filetype[ref_file_name]
 
-    ref_file_name = f'{ref_pkg_id}-' + entries_refid[file.name][2:]
-    return ref_pkg_name, ref_file_name, entries_filetype[ref_file_name]
 
-
-def get_model(model_file_hash):
-    """
-    Given a model file:
-    - open the model file and identify the model data file
-    - open the model data file
-    - identify the faces and 8verts files
-    - get all faces data
-    - get all 8verts data
-    - slim down faces data to fit the number of verts as otherwise it will crash
-    - combine the faces and vert data into the obj
-    - write obj
-    """
+def get_model(model_file_hash, all_file_info, ginsor_debug=False):
     print(model_file_hash)
-    pkg_db.start_db_connection(version)
+    pkg_db.start_db_connection()
     model_file = gf.get_file_from_hash(model_file_hash)
     model_data_file = get_model_data_file(model_file)
     print(f'1: {model_file} 2: {model_data_file}')
-    submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file, version)
+    submeshes_verts, submeshes_faces = get_verts_faces_data(model_data_file, all_file_info, model_file)
     obj_strings = []
     max_vert_used = 0
     # all_verts_str = ''  # joined obj
@@ -114,7 +104,8 @@ def get_model(model_file_hash):
             adjusted_faces_data, max_vert_used = adjust_faces_data(submeshes_faces[index_2][index_3], max_vert_used)
             obj_str = f'o {model_file_hash}_0_{index_2}_{index_3}\n'  # separated obj
             shifted_faces = shift_faces_down(adjusted_faces_data)
-            obj_str += get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3])  # replace with obj_str = for separated obj, otherwise verts_str, faces_str = for joined obj
+            # scaled_verts = scale_verts(submeshes_verts[index_2][index_3], model_file)
+            obj_str += get_obj_str(adjusted_faces_data, submeshes_verts[index_2][index_3], ginsor_debug)  # replace with obj_str = for separated obj, otherwise verts_str, faces_str = for joined obj
             obj_strings.append(obj_str)  # separated obj
             # all_verts_str += verts_str  # joined obj
             # all_faces_str += faces_str  # joined obj
@@ -122,6 +113,8 @@ def get_model(model_file_hash):
             write_obj(obj_str, f'{model_file_hash}_0_{index_2}_{index_3}')
     # obj_strings = f'o {model_file_hash}\n' + all_verts_str + all_faces_str  # joined obj
     write_obj(obj_strings, model_file_hash)
+    if __name__ == '__main__':
+        extract_textures(model_file_hash)
 
 
 def shift_faces_down(faces_data):
@@ -153,52 +146,136 @@ def adjust_faces_data(faces_data, max_vert_used):
     return new_faces_data, max(all_v)
 
 
-def get_verts_faces_data(model_data_file,version):
+def get_verts_faces_data(model_data_file, all_file_info, model_file):
     all_faces_data = []
     all_pos_verts_data = []
     all_uv_verts_data = []
     all_verts_data = []
-    # pkg_db.start_db_connection(version)
     faces_files, pos_verts_files, uv_verts_files, model_data_hex = get_faces_verts_files(model_data_file)
     if not faces_files or not pos_verts_files:
         return None, None
     for i, faces_file in enumerate(faces_files):
         pos_verts_file = pos_verts_files[i]
-        faces_data = get_faces_data(faces_file)
+        faces_data = get_faces_data(faces_file, all_file_info)
         if not pos_verts_file:
             return None, None
-        pos_verts_data = get_verts_data(pos_verts_file)
+        pos_verts_data = get_verts_data(pos_verts_file, all_file_info)
         # Even though this may be None it should be okay.
         uv_verts_data = None
         if len(uv_verts_files) == len(pos_verts_files):
             uv_verts_file = pos_verts_files[i]
-            uv_verts_data = get_verts_data(uv_verts_file)
+            uv_verts_data = get_verts_data(uv_verts_file, all_file_info)
             all_uv_verts_data.append(uv_verts_data)
         if not pos_verts_data:
             return None, None
         if not faces_data:
             return None, None
         all_faces_data.append(faces_data)
-        all_pos_verts_data.append(pos_verts_data)
+        scaled_pos_verts_data, model_scale = scale_verts(pos_verts_data, model_file)
+        repositioned_scaled_pos_verts_data = reposition_verts(scaled_pos_verts_data, model_scale, model_file)
+        all_pos_verts_data.append(repositioned_scaled_pos_verts_data)
         # verts_data = verts_8_data + verts_20_data
         if uv_verts_data:
-            if len(uv_verts_data) != len(pos_verts_data):
-                verts_data = pos_verts_data
+            if len(uv_verts_data) != len(repositioned_scaled_pos_verts_data):
+                verts_data = repositioned_scaled_pos_verts_data
             else:
-                verts_data = [pos_verts_data[i] + uv_verts_data[i] for i in range(len(pos_verts_data))]
+                verts_data = [repositioned_scaled_pos_verts_data[i] + uv_verts_data[i] for i in range(len(repositioned_scaled_pos_verts_data))]
         else:
-            verts_data = pos_verts_data
+            verts_data = repositioned_scaled_pos_verts_data
         all_verts_data.append(verts_data)
     submeshes_faces, submeshes_entries = separate_submeshes_remove_lods(model_data_hex, all_faces_data)
     submeshes_verts = {x: [] for x in submeshes_faces.keys()}
     for i in submeshes_faces.keys():
         for j, faces in enumerate(submeshes_faces[i]):
-            if submeshes_entries[i][j].EntryType == 769:
+            entry_type = submeshes_entries[i][j].EntryType
+            if entry_type == 769 or entry_type == 770:
                 submeshes_verts[i].append(trim_verts_data(all_verts_data[i], faces))
-            elif submeshes_entries[i][j].EntryType == 770:
-                submeshes_verts[i].append(trim_verts_data(all_verts_data[i], faces))
+            # elif submeshes_entries[i][j].EntryType == 770:
+            #     submeshes_verts[i].append(trim_verts_data(all_verts_data[i], faces))
+
+
 
     return submeshes_verts, submeshes_faces
+
+
+def scale_verts(verts_data, model_file):
+    """
+    HAVE NOT TRIED YET
+    TRY IT
+    HUGE POSSIBILITY
+    It's possible when Ginsor said 0x6C and MasterScaleHash its because its just for all axes!
+    So multiply but that for all axes, DON'T bother will sep axes out.
+    TRY doing that scale * 2 as well, might be correct.
+    """
+    # return verts_data
+    # Idk why this is the case but I think this is it. Meant to be 0x6C but wrong? idk
+    pkg_name = gf.get_pkg_name(model_file)
+    model_hex = gf.get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
+    # model_scale = [struct.unpack('f', bytes.fromhex(model_hex[j:j + 8]))[0] for j in [224, 232, 248]]
+    # model_scale = [struct.unpack('f', bytes.fromhex(model_hex[j:j + 8]))[0] for j in range(0x6C*2, (0x6C+12)*2, 8)]
+    model_scale = [struct.unpack('f', bytes.fromhex(model_hex[0x6C*2:0x6C*2 + 8]))[0]]*3
+    # model_scale = [2, 2, 2]
+    test = struct.unpack('f', bytes.fromhex(model_hex[0x70*2:0x70*2 + 8]))[0]
+    # print(model_scale)
+    for i in range(len(verts_data)):
+        for j in range(3):
+            verts_data[i][j] *= model_scale[j] * 2
+
+    return verts_data, model_scale[0]
+
+
+def reposition_verts(verts_data, scale, model_file):
+    """
+    This method needs to work by finding the minimum and making that the origin.
+    However, it seems like either 1. my rotation is broken or 2. need to rotate in reposition
+    """
+    # 1: Set min to origin. Not actually correct but prob wrong anyway.
+    def min_to_origin():
+        sep = [[x[i] for x in verts_data] for i in range(3)]
+        for i in range(3):
+            minm = np.min(sep[i])
+            for j in range(len(verts_data)):
+                verts_data[j][i] -= minm
+
+    # 2: Set median to origin
+    def avg_to_origin():
+        sep = [[x[i] for x in verts_data] for i in range(3)]
+        for i in range(3):
+            avg = np.mean(sep[i])
+            for j in range(len(verts_data)):
+                verts_data[j][i] -= avg
+
+    def floor_z_avg_xy_origin():
+        sep = [[x[i] for x in verts_data] for i in range(3)]
+        avgs = []
+        for i in range(3):
+            # if i == 2:
+            #     zmin = min(sep[i])
+            #     for j in range(len(verts_data)):
+            #         verts_data[j][i] -= zmin
+            # else:
+            avg = (max(sep[i])-min(sep[i]))/2 + min(sep[i])
+            # avg = np.median(list(set(sep[i])))
+            # avg = np.median(sep[i])
+            avgs.append(avg)
+            for j in range(len(verts_data)):
+                verts_data[j][i] -= avg
+        print(f'Calculated avg as {avgs}')
+
+    def move_by_scale():
+        pkg_name = gf.get_pkg_name(model_file)
+        model_hex = gf.get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
+        oneninetwo = [struct.unpack('f', bytes.fromhex(model_hex[192+8*i:192 +8*(i+1)]))[0] for i in range(3)]
+        for i in range(3):
+            for j in range(len(verts_data)):
+                verts_data[j][i] -= (scale-oneninetwo[i])
+
+    # avg_to_origin()
+    # min_to_origin()
+    # floor_z_avg_xy_origin()
+    move_by_scale()
+
+    return verts_data
 
 
 def get_model_data_file(model_file):
@@ -289,8 +366,11 @@ def separate_submeshes_remove_lods(model_data_hex, all_faces_data):
     return submeshes, ret_sub_entries
 
 
-def get_faces_data(faces_file):
-    ref_pkg_name, ref_file, ref_file_type = get_referenced_file(faces_file)
+def get_faces_data(faces_file, all_file_info):
+    ref_file = f"{all_file_info[faces_file.name]['RefPKG'][2:]}-{all_file_info[faces_file.name]['RefID'][2:]}"
+    ref_pkg_name = gf.get_pkg_name(ref_file)
+    ref_file_type = all_file_info[ref_file]['FileType']
+    # ref_pkg_name, ref_file, ref_file_type = get_referenced_file(faces_file)
     faces = []
     if ref_file_type == "Faces Header":
         faces_hex = gf.get_hex_data(f'{test_dir}/{ref_pkg_name}/{ref_file}.bin')
@@ -321,7 +401,7 @@ def get_signed_int(hexstr, bits):
     return value
 
 
-def get_verts_data(verts_file):
+def get_verts_data(verts_file, all_file_info):
     """
     Stride length 48 is a dynamic and physics-enabled object.
     """
@@ -329,10 +409,10 @@ def get_verts_data(verts_file):
     pkg_name = verts_file.pkg_name
     if not pkg_name:
         return None
-    # ref_file = f"{all_file_info[verts_file.name]['RefPKG'][2:]}-{all_file_info[verts_file.name]['RefID'][2:]}"
-    # ref_pkg_name = gf.get_pkg_name(ref_file)
-    # ref_file_type = all_file_info[ref_file]['FileType']
-    ref_pkg_name, ref_file, ref_file_type = get_referenced_file(verts_file)
+    ref_file = f"{all_file_info[verts_file.name]['RefPKG'][2:]}-{all_file_info[verts_file.name]['RefID'][2:]}"
+    ref_pkg_name = gf.get_pkg_name(ref_file)
+    ref_file_type = all_file_info[ref_file]['FileType']
+    # ref_pkg_name, ref_file, ref_file_type = get_referenced_file(verts_file)
     if ref_file_type == "Stride Header":
         stride_header = verts_file.header
 
@@ -479,14 +559,19 @@ def trim_verts_data(verts_data, faces_data):
     return verts_data[min(all_v)-1:max(all_v)]
 
 
-def get_obj_str(faces_data, verts_data):
+def get_obj_str(faces_data, verts_data, ginsor_debug):
     vns = []
     vts = []
     verts_str = ''
     for coord in verts_data:
         # if coord[-1] == 0.3535:
         #     coord = [round(x*(1/0.3535), 4) for x in coord]
-        verts_str += f'v {coord[0]} {coord[1]} {coord[2]}\n'
+        if ginsor_debug:
+            # print('aaa')
+            verts_str += f'v {-coord[0]} {coord[2]} {coord[1]}\n'
+        else:
+            # print('bbb')
+            verts_str += f'v {coord[0]} {coord[1]} {coord[2]}\n'
         # print(coord)
         if len(coord) > 3:
             vts.append(coord[3:6])
@@ -506,7 +591,10 @@ def get_obj_str(faces_data, verts_data):
         # verts_str += f'vn {coord[3:]}\n'
     faces_str = ''
     for face in faces_data:
-        faces_str += f'f {face[0]}/{face[0]}/{face[0]} {face[1]}/{face[1]}/{face[1]} {face[2]}/{face[2]}/{face[2]}\n'
+        if ginsor_debug:
+            faces_str += f'f {face[0]}/{face[0]}/{face[0]} {face[2]}/{face[2]}/{face[2]} {face[1]}/{face[1]}/{face[1]}\n'
+        else:
+            faces_str += f'f {face[0]}/{face[0]}/{face[0]} {face[1]}/{face[1]}/{face[1]} {face[2]}/{face[2]}/{face[2]}\n'
     return verts_str + faces_str  # for sep remove , replace with +
 
 
@@ -553,16 +641,46 @@ def write_obj(obj_strings, hsh):
     print('Written to file.')
 
 
+def extract_textures(model_hash):
+    file = gf.get_file_from_hash(model_hash)
+    pkg = gf.get_pkg_name(file)
+    print(f'{model_hash} mf1 C:/d2_output/{pkg}/{file}.bin')
+    mf1_hex = gf.get_hex_data(f'C:/d2_output/{pkg}/{file}.bin')
+    file = gf.get_file_from_hash(mf1_hex[16:24])
+    pkg = gf.get_pkg_name(file)
+    print(f'{model_hash} mf2 C:/d2_output/{pkg}/{file}.bin')
+    mf2_hex = gf.get_hex_data(f'C:/d2_output/{pkg}/{file}.bin')
+    texture_count = int(gf.get_flipped_hex(mf2_hex[80*2:84*2], 8), 16)
+    texture_id_entries = [[int(gf.get_flipped_hex(mf2_hex[i:i+4], 4), 16), mf2_hex[i+4:i+8], mf2_hex[i+8:i+12]] for i in range(96*2, 96*2+texture_count*16, 16)]
+    texture_entries = [mf1_hex[i:i+8] for i in range(176*2, 176*2+texture_count*8, 8)]
+    relevant_textures = {}
+    for i, entry in enumerate(texture_id_entries):
+        if entry[2] == '7B00':
+            relevant_textures[entry[0]] = gf.get_file_from_hash(texture_entries[i])
+    print(relevant_textures)
+    for file in list(set(relevant_textures.values())):
+        pkg = gf.get_pkg_name(file)
+        print(f'{model_hash} f C:/d2_output/{pkg}/{file}.bin')
+        f_hex = gf.get_hex_data(f'C:/d2_output/{pkg}/{file}.bin')
+        offset = f_hex.find('11728080')
+        count = int(gf.get_flipped_hex(f_hex[offset-16:offset-8], 8), 16)
+        images = [f_hex[offset+16+8+8*(2*i):offset+16+8*(2*i)+16] for i in range(count)]
+        for img in images:
+            file = gf.get_file_from_hash(img)
+            imager.get_image_from_file(f'C:/d2_output/{gf.get_pkg_name(file)}/{file}.bin', f'C:/d2_model_temp/texture_models/{model_hash}/')
+
+
 if __name__ == '__main__':
-    """
-    To redesign:
-    - add the second index stuff
-    - remove the weird iteration system for now for finding verts
-    - read entries from the data file
-    - mess around until you find the answer
-    """
+    pkg_db.start_db_connection()
+    all_file_info = {x[0]: dict(zip(['RefID', 'RefPKG', 'FileType'], x[1:])) for x in
+                     pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
     # CCC7F380
     # E73AED80
     # 86BFFE80
     # 0A34ED80
-    get_model('86BFFE80')
+    # A4BFFE80
+    # 3D56FC80
+
+    # 4B24ED80
+    get_model('0A34ED80', all_file_info, ginsor_debug=True)
+    import get_model_textures as gmt

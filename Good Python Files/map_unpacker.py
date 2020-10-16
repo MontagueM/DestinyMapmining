@@ -48,19 +48,48 @@ def get_header(file_hex, header):
     return header
 
 
-def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_2_1_all'):
+def unpack_map(main_file, all_file_info, ginsor_debug, folder_name='Other'):
     # If the file is too large you can uncomment the LARGE stuff
+
+    """
+    Ginsor method:
+    + in model_unpacker, scale with scaler from model master (offset 0x6C)
+    - position the model -
+    - rotating - should stay same method
+    - scale with the mapscaler -
+    - move it to the right position on the map from there -
+
+    Ideas:
+    - one of these will be using the location data, either step 2. or 5. I think 5. Step 2 is probably a model-based
+     positioning eg. setting it to be around the origin instead of randomly
+    - map scaler could be a few things. 1. There's the coords at the beginning which could be the scale (as he
+    specifically calls it *the* map scaler, so it's possible it's a single thing) 2. Could be the number at the end
+
+    Current idea:
+    1. Scale with model master offset thing
+    2. Set model to origin or smth, I won't do this yet as won't make a huge difference right? actually it might yea it will
+    3. Rotate as normal
+    4. Use the scale at 0x80 or 0x90
+    5. Move model to the location
+
+    2: a few options here. Could not change anything, could set to origin via the smallest coord, or set median point
+    to the origin. I'll write code for both for testing.
+    3: the rotation is fine but the previous positioning heavily affects how the rotation works.
+
+    Note: I think the location needs to be rotated too. Check that, might be wrong. (or could be a subtraction?) look
+    at the negative x coord
+    """
 
     fbx_map = pfb.FBox()
     fbx_map.create_node()
 
-    scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file, version)
+    scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file)
 
-    rotations, scales, scale_coords_extra, modifiers = get_transform_data(transform_hex, scale_hex)
+    rotations, scales, scale_coords_extra, locations, child_flags, map_scaler = get_transform_data(transform_hex, scale_hex)
     model_refs = get_model_refs(model_refs_hex)
     print(len(model_refs), len(rotations))
     copy_counts = get_copy_counts(copy_count_hex)
-    transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales)
+    transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales, locations, child_flags, map_scaler)
     # if main_file == '0932-000001FE':  # LARGE
     #     LARGE_total_end_files = 2  # LARGE
     #     for i in range(LARGE_total_end_files):  # LARGE
@@ -70,12 +99,12 @@ def unpack_map(main_file, all_file_info, folder_name='Other', version='2_9_2_1_a
     # else:
     #     return  # LARGE
 
-    obj_strings, fbx_map = get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers, all_file_info, fbx_map)
+    obj_strings, fbx_map = get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug)
     write_fbx(fbx_map, folder_name, main_file)
-    # write_obj_strings(obj_strings, folder_name, main_file)
+    write_obj_strings(obj_strings, folder_name, main_file)
 
 
-def get_hex_from_pkg(file, version):
+def get_hex_from_pkg(file):
     pkgs_dir = 'C:/d2_output/'
 
     main_pkg = gf.get_pkg_name(file)
@@ -115,7 +144,7 @@ def get_transform_data(transform_hex, scale_hex):
         hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
         floats = []
         for hex_float in hex_floats:
-            float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
+            float_value = round(struct.unpack('f', bytes.fromhex(hex_float))[0], 6)
             floats.append(float_value)
         rotations.append(floats)
 
@@ -130,7 +159,7 @@ def get_transform_data(transform_hex, scale_hex):
             hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
             floats = []
             for hex_float in hex_floats:
-                float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
+                float_value = round(struct.unpack('f', bytes.fromhex(hex_float))[0], 6)
                 floats.append(float_value)
             if len(floats) == 3:
                 coord = [floats[i:i + 3] for i in range(0, len(floats), 3)][0]
@@ -141,45 +170,27 @@ def get_transform_data(transform_hex, scale_hex):
             elif k == 1:
                 max_scale_coords.append(coord)
 
-        # hex_data = e[32 * 2:36 * 2]
-        # coord = []
-        # for j in range(2):
-        #     selection = get_flipped_hex(hex_data[j * 4:j * 4 + 4], 4)
-        #     exp_bitdepth = 0
-        #     mantissa_bitdepth = 15
-        #     bias = 2 ** (exp_bitdepth - 1) - 1
-        #     mantissa_division = 2 ** mantissa_bitdepth
-        #     int_fs = int(selection, 16)
-        #     mantissa = int_fs & 2 ** mantissa_bitdepth - 1
-        #     mantissa_abs = mantissa / mantissa_division
-        #     exponent = (int_fs >> mantissa_bitdepth) & 2 ** exp_bitdepth - 1
-        #     negative = int_fs >> 15
-        #     # print(mantissa, negative)
-        #     if exponent == 0:
-        #         flt = mantissa_abs * 2 ** (bias - 1)
-        #     else:
-        #         print('Error!!')
-        #         quit()
-        #     if negative:
-        #         flt += -0.35
-        #         # flt *= -1
-        #     coord.append(flt)
-        # scale_coords_extra.append(coord)
+    # Scale adjust
+    map_scaler = []
+    for e in rotation_entries_hex:
+        float_value = round(struct.unpack('f', bytes.fromhex(e[28*2:32*2]))[0], 6)
+        map_scaler.append(float_value)
 
-    # Getting modifier number from b77
-    modifiers = []
-    # for e in rotation_entries_hex:
-    #     hex = e[28 * 2:32 * 2]
-    #     hex_floats = [hex[i:i + 8] for i in range(0, len(hex), 8)]
-    #     floats = []
-    #     for hex_float in hex_floats:
-    #         float_value = struct.unpack('f', bytes.fromhex(hex_float))[0]
-    #         floats.append(float_value)
-    #     modifier = floats
-    #     modifiers.append(modifier)
+    locations = []
+    child_flags = []
+    for e in rotation_entries_hex:
+        loc_hex = e[16 * 2:28 * 2]
+        loc_hex_floats = [loc_hex[i:i + 8] for i in range(0, len(loc_hex), 8)]
+        location = []
+        child_flag = int(get_flipped_hex(e[44 * 2:48 * 2], 8), 16)
+        for hex_float in loc_hex_floats:
+            float_value = round(struct.unpack('f', bytes.fromhex(hex_float))[0], 6)
+            location.append(float_value)
+        locations.append(location)
+        child_flags.append(child_flag)
 
     scale_coords = [[min_scale_coords[i], max_scale_coords[i]] for i in range(len(min_scale_coords))]
-    return rotations, scale_coords, scale_coords_extra, modifiers
+    return rotations, scale_coords, scale_coords_extra, locations, child_flags, map_scaler
 
 
 def get_model_refs(model_refs_hex):
@@ -195,28 +206,30 @@ def get_copy_counts(copy_count_hex):
     return [e.Field0 for e in entries]
 
 
-def get_transforms_array(model_refs, copy_counts, rotations, scales):
+def get_transforms_array(model_refs, copy_counts, rotations, scales, location, child_flag, map_scaler):
     transforms_array = []
     last_index = 0
     for i, model in enumerate(model_refs):
         copies = copy_counts[i]
         transforms = []
         for copy_id in range(copies):
-            transforms.append([rotations[last_index + copy_id], scales[last_index + copy_id]])
+            transforms.append({'rotation': rotations[last_index + copy_id], 'scales_minmax': scales[last_index + copy_id],
+                               'location': location[last_index + copy_id], 'child_flag': child_flag[last_index + copy_id],
+                               'map_scaler': map_scaler[last_index + copy_id]})
         last_index += copies
         transform_array = [model, transforms]
         transforms_array.append(transform_array)
     return transforms_array
 
 
-def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifiers, all_file_info, fbx_map):
+def get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug):
     obj_strings = []
     max_vert_used = 0
     nums = 0
     fbx_count_debug = 0
     all_verts_str = ''
     all_faces_str = ''
-
+    test_verts = []
 
     for i, transform_array in enumerate(transforms_array):
         # if i > 440:
@@ -224,10 +237,12 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
         # elif i < 435:
         #     continue
         # if i > 0:
-        #     return obj_strings
+        #     return obj_strings, fbx_map
+        # if transform_array[0] != '4B24ED80' and transform_array[0] != '3D56FC80' and transform_array[0] != '0A34ED80' and transform_array[0] != 'EBC7F380' and transform_array[0] != 'CCC7F380' and transform_array[0] != '86BFFE80' and transform_array[0] != 'A4BFFE80' and transform_array[0] != 'EBC7F380':
+        #     continue
         model_file = gf.get_file_from_hash(transform_array[0])
         model_data_file = mut.get_model_data_file(model_file)
-        submeshes_verts, submeshes_faces = mut.get_verts_faces_data(model_data_file, all_file_info)
+        submeshes_verts, submeshes_faces = mut.get_verts_faces_data(model_data_file, all_file_info, model_file)
         if not submeshes_verts or not submeshes_faces:
             print('Skipping current model')
             continue
@@ -236,19 +251,60 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
         for copy_id, transform in enumerate(transform_array[1]):
             # print(f'scales {transform[1]} | mod {modifiers[nums]} | extra scale {scale_coords_extra[nums]}')
             nums += 1
-
+            ############### TODO 1 AND 2
+            if transform['child_flag'] == 1:
+                print('Is child, skipping.')
+                # continue
+            # TODO NOTE THERE ARE 6 VERTS PACKED AS IT IS POSX,POSY,POSZ,UV1,UV2,UV3???
             all_index_2_verts = []
             [[[all_index_2_verts.append(z) for z in y] for y in x] for x in submeshes_verts.values()]
-            r_verts_data = rotate_verts(all_index_2_verts, transform[0])
-            loc_verts = set_vert_locations(r_verts_data, transform[1])
+
+            # transform[4] = [transform[4][1], transform[4][0], transform[4][2]]
+            # transform[4] = [0.1, 0.01, 0.001]
+
+            # TODO this deletes uv verts
+            ############### TODO 3
+            r_verts_data = rotate_verts(all_index_2_verts, transform['rotation'])
+            # loc_rot = rotate_verts(transform['location'], transform['rotation'])
+            # transform['map_scaler'] = rotate_verts(transform['map_scaler'], transform['rotation'])
+            # print(r_verts_data[:3], r_verts_data[4], r_verts_data[10])
+            # transform[4] = rotate_verts(transform[4], transform[0])
+            ############### TODO 4
+            # loc_verts = set_vert_locations(r_verts_data, transform[1], transform[4])
+            # loc_verts = testing_scale(r_verts_data, transform[1], transform[2], transform[4])
+            map_scaled_verts = get_map_scaled_verts(r_verts_data, transform['map_scaler'])
+            # map_scaled_verts = r_verts_data
+            ############### TODO 5
+            map_moved_verts = get_map_moved_verts(map_scaled_verts, transform['location'])
+            # print(map_moved_verts[:3], r_verts_data[4], r_verts_data[10])
+            if transform_array[0] == '0A34ED80':
+                print('')
+            elif transform_array[0] == 'CCC7F380':
+                print('')
+            elif transform_array[0] == '86BFFE80':
+                print('')
+            elif transform_array[0] == 'A4BFFE80':
+                print('')
+            elif transform_array[0] == 'EBC7F380':
+                print('')
+            elif transform_array[0] == 'EBC7F380':
+                print('')
+            elif transform_array[0] == '3D56FC80':
+                print('')
+            elif transform_array[0] == '4B24ED80':
+                print('')
             offset = 0
             for index_2 in submeshes_verts.keys():
                 for index_3 in range(len(submeshes_verts[index_2])):
-                    new_verts = loc_verts[offset:offset + len(submeshes_verts[index_2][index_3])]
+                    # if transform[3] == 0:
+                    #     new_verts = loc_verts[offset:offset + len(submeshes_verts[index_2][index_3])]
+                    # else:
+                    #     new_verts = [[(x[i]*2 + transform[2][i]) for i in range(len(x))] for x in r_verts_data[offset:offset + len(submeshes_verts[index_2][index_3])]]
+                    new_verts = map_moved_verts[offset:offset + len(submeshes_verts[index_2][index_3])]
                     offset += len(submeshes_verts[index_2][index_3])
                     adjusted_faces_data, max_vert_used = mut.adjust_faces_data(submeshes_faces[index_2][index_3],
                                                                                           max_vert_used)
-                    obj_str = mut.get_obj_str(adjusted_faces_data, new_verts) # for sep
+                    obj_str = mut.get_obj_str(adjusted_faces_data, new_verts, ginsor_debug) # for sep
                     # obj_str = mut.get_obj_str(submeshes_faces[index_2][index_3], new_verts)
                     # all_verts_str += verts_str
                     # all_faces_str += faces_str
@@ -258,6 +314,22 @@ def get_model_obj_strings(transforms_array, version, scale_coords_extra, modifie
                     obj_strings.append(obj_str)  # for sep
     # obj_strings = f'o obj\n' + all_verts_str + all_faces_str
     return obj_strings, fbx_map
+
+
+def get_map_scaled_verts(verts_data, map_scaler):
+    for i in range(len(verts_data)):
+        for j in range(3):
+            verts_data[i][j] *= map_scaler
+    return verts_data
+
+
+def get_map_moved_verts(verts_data, location):
+    # location = [-location[0], location[2], location[1]]
+    print(location)
+    for i in range(len(verts_data)):
+        for j in range(3):
+            verts_data[i][j] += location[j]
+    return verts_data
 
 
 def shift_faces_down(faces_data):
@@ -293,33 +365,12 @@ def add_model_to_fbx_map(fbx_map, faces_data, verts_data, name):
     return fbx_map
 
 
-def set_vert_locations(verts, scale_info):
-    coords1 = scale_info[0]
-    coords2 = scale_info[1]
-    x = [x[0] for x in verts]
-    y = [x[1] for x in verts]
-    z = [x[2] for x in verts]
-    output = [[], [], []]
-    loop = [x, y, z]
-    for i, t in enumerate(loop):
-        t_max = max(t)
-        t_min = min(t)
-        c_min = coords1[i]
-        c_max = coords2[i]
-        t_range = t_max - t_min
-        for point in t:
-            if t_range == 0:
-                interp = c_min
-            else:
-                c_range = c_max - c_min
-                interp = (((point - t_min) / t_range) * c_range + c_min)
-            output[i].append(interp)
-    return [[output[0][i], output[1][i], output[2][i]] for i in range(len(x))]
-
-
-def rotate_verts(verts_data, rotation_transform):
+def rotate_verts(verts_data, rotation_transform, inverse=False):
     r = scipy.spatial.transform.Rotation.from_quat(rotation_transform)
-    quat_rots = scipy.spatial.transform.Rotation.apply(r, [[x[0], x[1], x[2]] for x in verts_data], inverse=False)
+    if len(verts_data) == 3:
+        quat_rots = scipy.spatial.transform.Rotation.apply(r, verts_data, inverse=inverse)
+    else:
+        quat_rots = scipy.spatial.transform.Rotation.apply(r, [[x[0], x[1], x[2]] for x in verts_data], inverse=inverse)
     return quat_rots.tolist()
 
 
@@ -353,8 +404,8 @@ def write_fbx(fbx_map, folder_name, file_name):
     print('Wrote fbx')
 
 
-def unpack_folder(pkg_name, version):
-    pkg_db.start_db_connection(version)
+def unpack_folder(pkg_name, ginsor_debug=False):
+    pkg_db.start_db_connection()
     entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID') if y == '0x166D'}
     entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG') if y == '0x0004'}
     entries_size = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, FileSizeB')}
@@ -363,12 +414,12 @@ def unpack_folder(pkg_name, version):
                      pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
     for file_name in file_names:
         if file_name in entries_refpkg.keys():
-            if 'B3F' not in file_name:
+            if '1A4A' not in file_name:
                 continue
             print(f'Unpacking {file_name}')
-            unpack_map(file_name,  all_file_info, folder_name=pkg_name, version=version)
+            unpack_map(file_name,  all_file_info, ginsor_debug, folder_name=pkg_name)
 
 
 if __name__ == '__main__':
     # unpack_map('0369-00000B77')
-    unpack_folder('city_tower_d2_0369', '2_9_2_1_all')
+    unpack_folder('city_tower_d2_0369', ginsor_debug=False)

@@ -2,11 +2,11 @@ import gf
 
 
 def get_model_textures(model_hash):
-    file = gf.get_file_from_hash(model_hash, 8)
+    file = gf.get_file_from_hash(model_hash)
     pkg = gf.get_pkg_name(file)
     print(f'{model_hash} mf1 C:/d2_output/{pkg}/{file}.bin')
     mf1_hex = gf.get_hex_data(f'C:/d2_output/{pkg}/{file}.bin')
-    file = gf.get_file_from_hash(mf1_hex[16:24], 8)
+    file = gf.get_file_from_hash(mf1_hex[16:24])
     pkg = gf.get_pkg_name(file)
     print(f'{model_hash} mf2 C:/d2_output/{pkg}/{file}.bin')
     mf2_hex = gf.get_hex_data(f'C:/d2_output/{pkg}/{file}.bin')
@@ -16,13 +16,13 @@ def get_model_textures(model_hash):
     relevant_textures = {}
     for i, entry in enumerate(texture_id_entries):
         if entry[2] == '7B00':
-            relevant_textures[entry[0]] = gf.get_file_from_hash(texture_entries[i], 8)
+            relevant_textures[entry[0]] = gf.get_file_from_hash(texture_entries[i])
     print(relevant_textures)
 
 
 if __name__ == '__main__':
-    get_model_textures('CCC7F380')
-    get_model_textures('0A34ED80')
+    # get_model_textures('CCC7F380')
+    # get_model_textures('0A34ED80')
     # get_model_textures('4922ED80')
     # get_model_textures('0022ED80')
-    get_model_textures('86BFFE80')
+    get_model_textures('A4BFFE80')
