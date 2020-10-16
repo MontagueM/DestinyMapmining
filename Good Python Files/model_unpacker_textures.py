@@ -169,9 +169,9 @@ def get_verts_faces_data(model_data_file, all_file_info, model_file):
         if not faces_data:
             return None, None
         all_faces_data.append(faces_data)
-        scaled_pos_verts_data = scale_verts(pos_verts_data, model_file)
-        repositioned_scaled_pos_verts_data = reposition_verts(scaled_pos_verts_data)
-        all_pos_verts_data.append(pos_verts_data)
+        scaled_pos_verts_data, model_scale = scale_verts(pos_verts_data, model_file)
+        repositioned_scaled_pos_verts_data = reposition_verts(scaled_pos_verts_data, model_scale)
+        all_pos_verts_data.append(repositioned_scaled_pos_verts_data)
         # verts_data = verts_8_data + verts_20_data
         if uv_verts_data:
             if len(uv_verts_data) != len(repositioned_scaled_pos_verts_data):
@@ -197,21 +197,32 @@ def get_verts_faces_data(model_data_file, all_file_info, model_file):
 
 
 def scale_verts(verts_data, model_file):
-    return verts_data
+    """
+    HAVE NOT TRIED YET
+    TRY IT
+    HUGE POSSIBILITY
+    It's possible when Ginsor said 0x6C and MasterScaleHash its because its just for all axes!
+    So multiply but that for all axes, DON'T bother will sep axes out.
+    TRY doing that scale * 2 as well, might be correct.
+    """
+    # return verts_data
     # Idk why this is the case but I think this is it. Meant to be 0x6C but wrong? idk
     pkg_name = gf.get_pkg_name(model_file)
     model_hex = gf.get_hex_data(f'{test_dir}/{pkg_name}/{model_file}.bin')
     # model_scale = [struct.unpack('f', bytes.fromhex(model_hex[j:j + 8]))[0] for j in [224, 232, 248]]
-    model_scale = [struct.unpack('f', bytes.fromhex(model_hex[j:j + 8]))[0] for j in range(0x6C*2, (0x6C+12)*2, 8)]
+    # model_scale = [struct.unpack('f', bytes.fromhex(model_hex[j:j + 8]))[0] for j in range(0x6C*2, (0x6C+12)*2, 8)]
+    model_scale = [struct.unpack('f', bytes.fromhex(model_hex[0x6C*2:0x6C*2 + 8]))[0]]*3
+    # model_scale = [2, 2, 2]
+    test = struct.unpack('f', bytes.fromhex(model_hex[0x70*2:0x70*2 + 8]))[0]
     print(model_scale)
     for i in range(len(verts_data)):
         for j in range(3):
-            verts_data[i][j] *= model_scale[j]
+            verts_data[i][j] *= model_scale[j] * 2
 
-    return verts_data
+    return verts_data, model_scale[0]
 
 
-def reposition_verts(verts_data):
+def reposition_verts(verts_data, scale):
     """
     This method needs to work by finding the minimum and making that the origin.
     However, it seems like either 1. my rotation is broken or 2. need to rotate in reposition
@@ -232,10 +243,35 @@ def reposition_verts(verts_data):
             for j in range(len(verts_data)):
                 verts_data[j][i] -= avg
 
+    def floor_z_avg_xy_origin():
+        sep = [[x[i] for x in verts_data] for i in range(3)]
+        avgs = []
+        for i in range(3):
+            # if i == 2:
+            #     zmin = min(sep[i])
+            #     for j in range(len(verts_data)):
+            #         verts_data[j][i] -= zmin
+            # else:
+            avg = (max(sep[i])-min(sep[i]))/2 + min(sep[i])
+            # avg = np.median(list(set(sep[i])))
+            # avg = np.median(sep[i])
+            avgs.append(avg)
+            for j in range(len(verts_data)):
+                verts_data[j][i] -= avg
+        print(f'Calculated avg as {avgs}')
+
+    def move_by_scale():
+        for i in range(3):
+            for j in range(len(verts_data)):
+                verts_data[j][i] -= scale
+
     # avg_to_origin()
     # min_to_origin()
+    # floor_z_avg_xy_origin()
+    move_by_scale()
 
     return verts_data
+
 
 def get_model_data_file(model_file):
     pkg_name = gf.get_pkg_name(model_file)
@@ -526,10 +562,10 @@ def get_obj_str(faces_data, verts_data, ginsor_debug):
         # if coord[-1] == 0.3535:
         #     coord = [round(x*(1/0.3535), 4) for x in coord]
         if ginsor_debug:
-            print('aaa')
+            # print('aaa')
             verts_str += f'v {-coord[0]} {coord[2]} {coord[1]}\n'
         else:
-            print('bbb')
+            # print('bbb')
             verts_str += f'v {coord[0]} {coord[1]} {coord[2]}\n'
         # print(coord)
         if len(coord) > 3:
@@ -608,4 +644,8 @@ if __name__ == '__main__':
     # E73AED80
     # 86BFFE80
     # 0A34ED80
-    get_model('A4BFFE80', all_file_info, ginsor_debug=True)
+    # A4BFFE80
+    # 3D56FC80
+
+    # 4B24ED80
+    get_model('A4BFFE80', all_file_info, ginsor_debug=False)

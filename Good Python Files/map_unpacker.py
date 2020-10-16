@@ -85,11 +85,11 @@ def unpack_map(main_file, all_file_info, ginsor_debug, folder_name='Other'):
 
     scale_hex, transform_hex, model_refs_hex, copy_count_hex = get_hex_from_pkg(main_file)
 
-    rotations, scales, scale_coords_extra, locations, child_flags, scale_adjust = get_transform_data(transform_hex, scale_hex)
+    rotations, scales, scale_coords_extra, locations, child_flags, map_scaler = get_transform_data(transform_hex, scale_hex)
     model_refs = get_model_refs(model_refs_hex)
     print(len(model_refs), len(rotations))
     copy_counts = get_copy_counts(copy_count_hex)
-    transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales, locations, child_flags, scale_adjust, get_map_scaler(main_file))
+    transforms_array = get_transforms_array(model_refs, copy_counts, rotations, scales, locations, child_flags, map_scaler)
     # if main_file == '0932-000001FE':  # LARGE
     #     LARGE_total_end_files = 2  # LARGE
     #     for i in range(LARGE_total_end_files):  # LARGE
@@ -102,14 +102,6 @@ def unpack_map(main_file, all_file_info, ginsor_debug, folder_name='Other'):
     obj_strings, fbx_map = get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug)
     write_fbx(fbx_map, folder_name, main_file)
     write_obj_strings(obj_strings, folder_name, main_file)
-
-
-def get_map_scaler(main_file):
-    pkgs_dir = 'C:/d2_output/'
-    main_pkg = gf.get_pkg_name(main_file)
-    main_hex = get_hex_data(f'{pkgs_dir}{main_pkg}/{main_file}.bin')
-    map_scaler = [struct.unpack('f', bytes.fromhex(main_hex[j:j + 8]))[0] for j in range(0x90*2, (0x90+12)*2, 8)]
-    return map_scaler
 
 
 def get_hex_from_pkg(file):
@@ -179,15 +171,10 @@ def get_transform_data(transform_hex, scale_hex):
                 max_scale_coords.append(coord)
 
     # Scale adjust
-    scale_adjust = []
+    map_scaler = []
     for e in rotation_entries_hex:
-        h = e[28*2:40*2]
-        hex_floats = [h[i:i + 8] for i in range(0, len(h), 8)]
-        floats = []
-        for hex_float in hex_floats:
-            float_value = round(struct.unpack('f', bytes.fromhex(hex_float))[0], 6)
-            floats.append(float_value)
-        scale_adjust.append(floats)
+        float_value = round(struct.unpack('f', bytes.fromhex(e[28*2:32*2]))[0], 6)
+        map_scaler.append(float_value)
 
     locations = []
     child_flags = []
@@ -203,7 +190,7 @@ def get_transform_data(transform_hex, scale_hex):
         child_flags.append(child_flag)
 
     scale_coords = [[min_scale_coords[i], max_scale_coords[i]] for i in range(len(min_scale_coords))]
-    return rotations, scale_coords, scale_coords_extra, locations, child_flags, scale_adjust
+    return rotations, scale_coords, scale_coords_extra, locations, child_flags, map_scaler
 
 
 def get_model_refs(model_refs_hex):
@@ -219,7 +206,7 @@ def get_copy_counts(copy_count_hex):
     return [e.Field0 for e in entries]
 
 
-def get_transforms_array(model_refs, copy_counts, rotations, scales, location, child_flag, scale_adjust, map_scaler):
+def get_transforms_array(model_refs, copy_counts, rotations, scales, location, child_flag, map_scaler):
     transforms_array = []
     last_index = 0
     for i, model in enumerate(model_refs):
@@ -228,7 +215,7 @@ def get_transforms_array(model_refs, copy_counts, rotations, scales, location, c
         for copy_id in range(copies):
             transforms.append({'rotation': rotations[last_index + copy_id], 'scales_minmax': scales[last_index + copy_id],
                                'location': location[last_index + copy_id], 'child_flag': child_flag[last_index + copy_id],
-                               'scale_adjust': scale_adjust[last_index + copy_id], 'map_scaler': map_scaler})
+                               'map_scaler': map_scaler[last_index + copy_id]})
         last_index += copies
         transform_array = [model, transforms]
         transforms_array.append(transform_array)
@@ -251,8 +238,8 @@ def get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug
         #     continue
         # if i > 0:
         #     return obj_strings, fbx_map
-        if transform_array[0] != 'CCC7F380' and transform_array[0] != '86BFFE80' and transform_array[0] != 'A4BFFE80':
-            continue
+        # if transform_array[0] != '4B24ED80' and transform_array[0] != '3D56FC80' and transform_array[0] != '0A34ED80' and transform_array[0] != 'EBC7F380' and transform_array[0] != 'CCC7F380' and transform_array[0] != '86BFFE80' and transform_array[0] != 'A4BFFE80' and transform_array[0] != 'EBC7F380':
+        #     continue
         model_file = gf.get_file_from_hash(transform_array[0])
         model_data_file = mut.get_model_data_file(model_file)
         submeshes_verts, submeshes_faces = mut.get_verts_faces_data(model_data_file, all_file_info, model_file)
@@ -278,17 +265,18 @@ def get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug
             # TODO this deletes uv verts
             ############### TODO 3
             r_verts_data = rotate_verts(all_index_2_verts, transform['rotation'])
-            transform['map_scaler'] = rotate_verts(transform['map_scaler'], transform['rotation'])
-            print(r_verts_data[:3], r_verts_data[4], r_verts_data[10])
+            loc_rot = rotate_verts(transform['location'], transform['rotation'])
+            # transform['map_scaler'] = rotate_verts(transform['map_scaler'], transform['rotation'])
+            # print(r_verts_data[:3], r_verts_data[4], r_verts_data[10])
             # transform[4] = rotate_verts(transform[4], transform[0])
             ############### TODO 4
             # loc_verts = set_vert_locations(r_verts_data, transform[1], transform[4])
             # loc_verts = testing_scale(r_verts_data, transform[1], transform[2], transform[4])
-            # map_scaled_verts = get_map_scaled_verts(r_verts_data, transform['map_scaler'])
-            map_scaled_verts = r_verts_data
+            map_scaled_verts = get_map_scaled_verts(r_verts_data, transform['map_scaler'])
+            # map_scaled_verts = r_verts_data
             ############### TODO 5
             map_moved_verts = get_map_moved_verts(map_scaled_verts, transform['location'])
-            print(map_moved_verts[:3], r_verts_data[4], r_verts_data[10])
+            # print(map_moved_verts[:3], r_verts_data[4], r_verts_data[10])
             if transform_array[0] == '0A34ED80':
                 print('')
             elif transform_array[0] == 'CCC7F380':
@@ -296,6 +284,14 @@ def get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug
             elif transform_array[0] == '86BFFE80':
                 print('')
             elif transform_array[0] == 'A4BFFE80':
+                print('')
+            elif transform_array[0] == 'EBC7F380':
+                print('')
+            elif transform_array[0] == 'EBC7F380':
+                print('')
+            elif transform_array[0] == '3D56FC80':
+                print('')
+            elif transform_array[0] == '4B24ED80':
                 print('')
             offset = 0
             for index_2 in submeshes_verts.keys():
@@ -323,11 +319,12 @@ def get_model_obj_strings(transforms_array, all_file_info, fbx_map, ginsor_debug
 def get_map_scaled_verts(verts_data, map_scaler):
     for i in range(len(verts_data)):
         for j in range(3):
-            verts_data[i][j] *= map_scaler[j]
+            verts_data[i][j] *= map_scaler
     return verts_data
 
 
 def get_map_moved_verts(verts_data, location):
+    # location = [-location[0], location[2], location[1]]
     for i in range(len(verts_data)):
         for j in range(3):
             verts_data[i][j] += location[j]
@@ -424,4 +421,4 @@ def unpack_folder(pkg_name, version, ginsor_debug=False):
 
 if __name__ == '__main__':
     # unpack_map('0369-00000B77')
-    unpack_folder('city_tower_d2_0369', '2_9_2_1_all', ginsor_debug=True)
+    unpack_folder('city_tower_d2_0369', '2_9_2_1_all', ginsor_debug=False)
