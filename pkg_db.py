@@ -4,10 +4,10 @@ con = None
 c = None
 
 
-def start_db_connection(version_str):
+def start_db_connection():
     global con
     global c
-    con = sq.connect(f'D:/D2_Datamining/Package Unpacker/db/{version_str}.db')
+    con = sq.connect(f'D:/D2_Datamining/Package Unpacker/db/2_9_2_1_all.db')
     c = con.cursor()
 
 

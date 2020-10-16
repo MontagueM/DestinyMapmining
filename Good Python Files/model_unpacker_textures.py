@@ -7,6 +7,7 @@ import os
 import fbx
 import pyfbx_jo as pfb
 import gf
+import image_decoder_new as imager
 
 version = '2_9_2_1_all'
 
@@ -89,7 +90,7 @@ test_dir = 'C:/d2_output/'
 
 def get_model(model_file_hash, all_file_info, ginsor_debug=False):
     print(model_file_hash)
-    pkg_db.start_db_connection(version)
+    pkg_db.start_db_connection()
     model_file = gf.get_file_from_hash(model_file_hash)
     model_data_file = get_model_data_file(model_file)
     print(f'1: {model_file} 2: {model_data_file}')
@@ -112,6 +113,7 @@ def get_model(model_file_hash, all_file_info, ginsor_debug=False):
             write_obj(obj_str, f'{model_file_hash}_0_{index_2}_{index_3}')
     # obj_strings = f'o {model_file_hash}\n' + all_verts_str + all_faces_str  # joined obj
     write_obj(obj_strings, model_file_hash)
+    extract_textures(model_file_hash)
 
 
 def shift_faces_down(faces_data):
@@ -148,7 +150,6 @@ def get_verts_faces_data(model_data_file, all_file_info, model_file):
     all_pos_verts_data = []
     all_uv_verts_data = []
     all_verts_data = []
-    # pkg_db.start_db_connection(version)
     faces_files, pos_verts_files, uv_verts_files, model_data_hex = get_faces_verts_files(model_data_file)
     if not faces_files or not pos_verts_files:
         return None, None
@@ -636,8 +637,37 @@ def write_obj(obj_strings, hsh):
     print('Written to file.')
 
 
+def extract_textures(model_hash):
+    file = gf.get_file_from_hash(model_hash)
+    pkg = gf.get_pkg_name(file)
+    print(f'{model_hash} mf1 C:/d2_output/{pkg}/{file}.bin')
+    mf1_hex = gf.get_hex_data(f'C:/d2_output/{pkg}/{file}.bin')
+    file = gf.get_file_from_hash(mf1_hex[16:24])
+    pkg = gf.get_pkg_name(file)
+    print(f'{model_hash} mf2 C:/d2_output/{pkg}/{file}.bin')
+    mf2_hex = gf.get_hex_data(f'C:/d2_output/{pkg}/{file}.bin')
+    texture_count = int(gf.get_flipped_hex(mf2_hex[80*2:84*2], 8), 16)
+    texture_id_entries = [[int(gf.get_flipped_hex(mf2_hex[i:i+4], 4), 16), mf2_hex[i+4:i+8], mf2_hex[i+8:i+12]] for i in range(96*2, 96*2+texture_count*16, 16)]
+    texture_entries = [mf1_hex[i:i+8] for i in range(176*2, 176*2+texture_count*8, 8)]
+    relevant_textures = {}
+    for i, entry in enumerate(texture_id_entries):
+        if entry[2] == '7B00':
+            relevant_textures[entry[0]] = gf.get_file_from_hash(texture_entries[i])
+    print(relevant_textures)
+    for file in list(set(relevant_textures.values())):
+        pkg = gf.get_pkg_name(file)
+        print(f'{model_hash} f C:/d2_output/{pkg}/{file}.bin')
+        f_hex = gf.get_hex_data(f'C:/d2_output/{pkg}/{file}.bin')
+        offset = f_hex.find('11728080')
+        count = int(gf.get_flipped_hex(f_hex[offset-16:offset-8], 8), 16)
+        images = [f_hex[offset+16+8+8*(2*i):offset+16+8*(2*i)+16] for i in range(count)]
+        for img in images:
+            file = gf.get_file_from_hash(img)
+            imager.get_image_from_file(f'C:/d2_output/{gf.get_pkg_name(file)}/{file}.bin', f'C:/d2_model_temp/texture_models/{model_hash}/')
+
+
 if __name__ == '__main__':
-    pkg_db.start_db_connection('2_9_2_1_all')
+    pkg_db.start_db_connection()
     all_file_info = {x[0]: dict(zip(['RefID', 'RefPKG', 'FileType'], x[1:])) for x in
                      pkg_db.get_entries_from_table('Everything', 'FileName, RefID, RefPKG, FileType')}
     # CCC7F380
@@ -648,4 +678,5 @@ if __name__ == '__main__':
     # 3D56FC80
 
     # 4B24ED80
-    get_model('A4BFFE80', all_file_info, ginsor_debug=False)
+    get_model('86CFC180', all_file_info, ginsor_debug=False)
+    import get_model_textures as gmt

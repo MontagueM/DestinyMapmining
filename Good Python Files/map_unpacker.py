@@ -403,8 +403,8 @@ def write_fbx(fbx_map, folder_name, file_name):
     print('Wrote fbx')
 
 
-def unpack_folder(pkg_name, version, ginsor_debug=False):
-    pkg_db.start_db_connection(version)
+def unpack_folder(pkg_name, ginsor_debug=False):
+    pkg_db.start_db_connection()
     entries_refid = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefID') if y == '0x166D'}
     entries_refpkg = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, RefPKG') if y == '0x0004'}
     entries_size = {x: y for x, y in pkg_db.get_entries_from_table(pkg_name, 'FileName, FileSizeB')}
@@ -421,4 +421,4 @@ def unpack_folder(pkg_name, version, ginsor_debug=False):
 
 if __name__ == '__main__':
     # unpack_map('0369-00000B77')
-    unpack_folder('city_tower_d2_0369', '2_9_2_1_all', ginsor_debug=False)
+    unpack_folder('city_tower_d2_0369', ginsor_debug=False)
